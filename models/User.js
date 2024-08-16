@@ -7,17 +7,25 @@ module.exports = (sequelize, DataTypes) => {
             autoIncrement: true
         },
         email: {
-            type: DataTypes.STRING(255)
+            type: DataTypes.STRING(255),
+            isNull: false
+        },
+        password: {
+            type: DataTypes.STRING(255),
+            isNull: false
         },
         firstName: {
-            type: DataTypes.STRING(255)
+            type: DataTypes.STRING(255),
+            isNull: false
         },
         lastName: {
-            type: DataTypes.STRING(255)
+            type: DataTypes.STRING(255),
+            isNull: false
         },
         isAdmin: {
             type: DataTypes.BOOLEAN,
-            defaultValue: false
+            defaultValue: false,
+            isNull: false
         }
     })
 

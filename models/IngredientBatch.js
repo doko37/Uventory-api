@@ -1,8 +1,12 @@
 module.exports = (sequelize, DataTypes) => {
     const IngredientBatch = sequelize.define('IngredientBatch', {
+        id: {
+            type: DataTypes.INTEGER,
+            primaryKey: true,
+            autoIncrement: true
+        },
         batchNo: {
-            type: DataTypes.STRING(255),
-            primaryKey: true
+            type: DataTypes.STRING(255)
         },
         ingredientId: {
             type: DataTypes.INTEGER,
@@ -18,7 +22,7 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.DATE
         },
         qty: {
-            type: DataTypes.FLOAT(3)
+            type: DataTypes.FLOAT
         },
         location: {
             type: DataTypes.INTEGER,

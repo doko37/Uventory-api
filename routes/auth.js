@@ -2,13 +2,27 @@ const router = require('express').Router()
 const db = require('../db')
 const User = db.models.User
 
-router.get('/', async (req, res) => {
+router.get('/user', async (req, res) => {
     await User.findAll()
         .then(users => {
             res.send(users)
         })
         .catch(err => {
             console.err(err)
+        })
+})
+
+router.get('/user/:id', async (req, res) => {
+    await User.findOne({
+        where: {
+            id: req.params.id
+        }
+    })
+        .then(user => {
+            res.status(200).send(user.toJSON())
+        })
+        .catch(err => {
+            res.status(500).send(err)
         })
 })
 

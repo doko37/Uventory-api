@@ -6,11 +6,11 @@ module.exports = (sequelize, DataTypes) => {
             unique: true,
             autoIncrement: true
         },
-        batchNo: {
-            type: DataTypes.STRING(255),
+        batchId: {
+            type: DataTypes.INTEGER,
             references: {
                 model: 'IngredientBatches',
-                key: 'batchNo'
+                key: 'id'
             }
         },
         logId: {
@@ -21,7 +21,7 @@ module.exports = (sequelize, DataTypes) => {
             }
         },
         batchQtyUsed: {
-            type: DataTypes.FLOAT(3)
+            type: DataTypes.FLOAT
         }
     })
 

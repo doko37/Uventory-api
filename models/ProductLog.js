@@ -13,12 +13,8 @@ module.exports = (sequelize, DataTypes) => {
                 key: 'id'
             }
         },
-        productBatchNo: {
-            type: DataTypes.STRING(255),
-            references: {
-                model: 'ProductBatches',
-                key: 'batchNo'
-            }
+        batchNo: {
+            type: DataTypes.STRING(255)
         },
         user: {
             type: DataTypes.INTEGER,
@@ -32,6 +28,9 @@ module.exports = (sequelize, DataTypes) => {
         },
         qty: {
             type: DataTypes.INTEGER
+        },
+        remark: {
+            type: DataTypes.TEXT
         }
     })
 

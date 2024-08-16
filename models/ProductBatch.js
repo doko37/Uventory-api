@@ -1,20 +1,17 @@
 module.exports = (sequelize, DataTypes) => {
     const ProductBatch = sequelize.define('ProductBatch', {
+        id: {
+            type: DataTypes.INTEGER,
+            primaryKey: true,
+            autoIncrement: true
+        },
         batchNo: {
-            type: DataTypes.STRING(255),
-            primaryKey: true
+            type: DataTypes.STRING(255)
         },
         productId: {
             type: DataTypes.INTEGER,
             references: {
                 model: 'Products',
-                key: 'id'
-            }
-        },
-        user: {
-            type: DataTypes.INTEGER,
-            references: {
-                model: 'Users',
                 key: 'id'
             }
         },
@@ -26,9 +23,6 @@ module.exports = (sequelize, DataTypes) => {
         },
         qty: {
             type: DataTypes.INTEGER
-        },
-        inout: {
-            type: DataTypes.ENUM('in', 'out')
         },
         location: {
             type: DataTypes.INTEGER,

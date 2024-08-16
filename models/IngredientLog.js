@@ -13,11 +13,14 @@ module.exports = (sequelize, DataTypes) => {
                 key: 'id'
             }
         },
-        ingredientBatchNo: {
-            type: DataTypes.STRING(255),
+        batchNo: {
+            type: DataTypes.STRING(255)
+        },
+        location: {
+            type: DataTypes.INTEGER,
             references: {
-                model: 'IngredientBatches',
-                key: 'batchNo'
+                model: 'Locations',
+                key: 'id'
             }
         },
         user: {
@@ -31,7 +34,17 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.ENUM('in', 'out')
         },
         qty: {
-            type: DataTypes.FLOAT(3)
+            type: DataTypes.FLOAT
+        },
+        inProduct: {
+            type: DataTypes.INTEGER,
+            references: {
+                model: 'Products',
+                key: 'id'
+            }
+        },
+        remark: {
+            type: DataTypes.TEXT
         }
     })
 
