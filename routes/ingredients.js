@@ -8,8 +8,11 @@ const IngredientBatch = db.models.IngredientBatch
 const IngredientLog = db.models.IngredientLog
 const Location = db.models.Location
 const Product = db.models.Product
+const { authenticateTokenAndAdmin } = require('./authToken')
+const { authenticateTokenAndMember } = require('./authToken')
+const { authenticateToken } = require('./authToken')
 
-router.post('/', async (req, res) => {
+router.post('/', authenticateTokenAndAdmin, async (req, res) => {
     Ingredient.create({
         code: req.body.code,
         name: req.body.name,
@@ -27,7 +30,7 @@ router.post('/', async (req, res) => {
         })
 })
 
-router.post('/category', async (req, res) => {
+router.post('/category', authenticateTokenAndAdmin, async (req, res) => {
     IngredientCategory.create({
         name: req.body.name
     })
@@ -35,7 +38,7 @@ router.post('/category', async (req, res) => {
         .catch(err => res.status(500).send(err))
 })
 
-router.post('/log', async (req, res) => {
+router.post('/log', authenticateTokenAndMember, async (req, res) => {
     const inOut = req.body.inOut
     try {
 
@@ -49,7 +52,7 @@ router.post('/log', async (req, res) => {
                 ingredientId: req.body.ingredientId,
                 batchNo: req.body.batchNo,
                 location: req.body.location.id,
-                user: req.body.user,
+                user: `${req.user.firstName} ${req.user.lastName}`,
                 inout: 'in',
                 qty: req.body.qty,
                 remark: req.body.remark
@@ -102,7 +105,7 @@ router.post('/log', async (req, res) => {
                 ingredientId: req.body.ingredientId,
                 batchNo: batch.batchNo,
                 location: req.body.location.id,
-                user: req.body.user,
+                user: `${req.user.firstName} ${req.user.lastName}`,
                 inout: 'out',
                 qty: req.body.qty,
                 remark: req.body.remark,
@@ -149,8 +152,8 @@ router.post('/log', async (req, res) => {
                         IngredientLog.create({
                             ingredientId: req.body.ingredientId,
                             batchNo: batch.batchNo,
-                            location: req.body.location.id,
-                            user: req.body.user,
+                            location: batch.location,
+                            user: `${req.user.firstName} ${req.user.lastName}`,
                             inout: 'out',
                             qty: remainder,
                             remark: req.body.remark,
@@ -166,8 +169,8 @@ router.post('/log', async (req, res) => {
                         IngredientLog.create({
                             ingredientId: req.body.ingredientId,
                             batchNo: batch.batchNo,
-                            location: req.body.location.id,
-                            user: req.body.user,
+                            location: batch.location,
+                            user: `${req.user.firstName} ${req.user.lastName}`,
                             inout: 'out',
                             qty: batch.qty,
                             remark: req.body.remark,
@@ -204,7 +207,7 @@ router.post('/log', async (req, res) => {
     }
 })
 
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     let whereCondition = {}
 
     console.log(req.query.search)
@@ -230,13 +233,13 @@ router.get('/', async (req, res) => {
     }
 })
 
-router.get('/categories', async (req, res) => {
+router.get('/categories', authenticateToken, async (req, res) => {
     IngredientCategory.findAll()
         .then(data => res.status(200).send(data))
         .catch(err => res.status(500).send(err))
 })
 
-router.get('/:id/batches', async (req, res) => {
+router.get('/:id/batches', authenticateToken, async (req, res) => {
     try {
         const batches = await IngredientBatch.findAll({
             where: {
@@ -253,7 +256,7 @@ router.get('/:id/batches', async (req, res) => {
     }
 })
 
-router.get('/batch/:id', async (req, res) => {
+router.get('/batch/:id', authenticateToken, async (req, res) => {
     try {
         const batch = await IngredientBatch.findOne({
             where: {
@@ -267,10 +270,12 @@ router.get('/batch/:id', async (req, res) => {
     }
 })
 
-router.get('/logs', async (req, res) => {
+router.get('/logs', authenticateToken, async (req, res) => {
     try {
         let sortBy
-        if (req.query.sortBy === 'Batch No') {
+        if (!req.query.sortBy) {
+            sortBy = 'createdAt'
+        } else if (req.query.sortBy === 'Batch No') {
             sortBy = 'batchNo'
         } else if (req.query.sortBy === 'Date') {
             sortBy = 'createdAt'
@@ -312,7 +317,7 @@ router.get('/logs', async (req, res) => {
                 model: Ingredient,
                 attributes: ['code']
             }],
-            order: [[sortBy, req.query.dir]]
+            order: [[sortBy, req.query.dir || 'ASC']]
         })
         res.status(200).send(logs)
     } catch (err) {
@@ -321,7 +326,7 @@ router.get('/logs', async (req, res) => {
     }
 })
 
-router.get('/:id/logs', async (req, res) => {
+router.get('/:id/logs', authenticateToken, async (req, res) => {
     try {
         let sortBy
         if (req.query.sortBy === 'Batch No') {
@@ -376,7 +381,7 @@ router.get('/:id/logs', async (req, res) => {
     }
 })
 
-router.get('/log/:id', async (req, res) => {
+router.get('/log/:id', authenticateToken, async (req, res) => {
     try {
         const log = await IngredientLog.findOne({
             include: [
@@ -405,7 +410,7 @@ router.get('/log/:id', async (req, res) => {
     }
 })
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
     Ingredient.findOne({
         where: {
             id: req.params.id
@@ -415,7 +420,7 @@ router.get('/:id', async (req, res) => {
         .catch(err => res.status(500).send(err))
 })
 
-router.get('/category/:category', async (req, res) => {
+router.get('/category/:category', authenticateToken, async (req, res) => {
     try {
         let ingredients
         let sortBy
@@ -458,7 +463,7 @@ router.get('/category/:category', async (req, res) => {
     }
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateTokenAndMember, async (req, res) => {
     try {
         await Ingredient.update(req.body, {
             where: {

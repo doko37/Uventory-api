@@ -22,9 +22,9 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING(255),
             isNull: false
         },
-        isAdmin: {
-            type: DataTypes.BOOLEAN,
-            defaultValue: false,
+        access: {
+            type: DataTypes.ENUM('admin', 'member', 'associate-member'),
+            defaultValue: 'associate-member',
             isNull: false
         }
     })

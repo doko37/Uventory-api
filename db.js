@@ -25,6 +25,7 @@ const IngredientBatch = require('./models/IngredientBatch')(sequelize, DataTypes
 const IngredientLog = require('./models/IngredientLog')(sequelize, DataTypes)
 const Supplier = require('./models/Supplier')(sequelize, DataTypes)
 const Brand = require('./models/Brand')(sequelize, DataTypes)
+const RefreshToken = require('./models/RefreshToken')(sequelize, DataTypes)
 
 Ingredient.belongsTo(Supplier, { foreignKey: 'supplier' });
 Ingredient.belongsTo(IngredientCategory, { foreignKey: 'category' })
@@ -39,16 +40,6 @@ ProductBatch.belongsTo(Product, { foreignKey: 'productId' });
 ProductBatch.belongsTo(Location, { foreignKey: 'location' })
 ProductLog.belongsTo(Product, { foreignKey: 'productId' })
 ProductLog.belongsTo(User, { foreignKey: 'user' })
-// IngredientLog.belongsTo(IngredientBatch, { foreignKey: 'ingredientBatchNo' });
-// IngredientLog.belongsTo(User, { foreignKey: 'user' });
-// IngredientBatchIngredientLog.belongsTo(IngredientBatch, { foreignKey: 'batchNo' })
-// IngredientBatchIngredientLog.belongsTo(IngredientLog, { foreignKey: 'logId' })
-// IngredientLogProductBatch.belongsTo(IngredientLog, { foreignKey: 'ingredientLogId' });
-// IngredientLogProductBatch.belongsTo(ProductBatch, { foreignKey: 'productBatchNo' });
-// ProductIngredient.belongsTo(Ingredient, { foreignKey: 'ingredientId' });
-// ProductIngredient.belongsTo(Product, { foreignKey: 'productId' });
-// Location.belongsTo(IngredientBatch, { foreignKey: 'location' })
-// Location.belongsTo(ProductBatch, { foreignKey: 'location' })
 
 sequelize.authenticate()
     .then(() => console.log("Database connected"))
