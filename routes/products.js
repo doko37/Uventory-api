@@ -1,6 +1,7 @@
 const router = require('express').Router()
 const { Op } = require('sequelize')
 const db = require('../db')
+const { authenticateTokenAndAdmin, authenticateTokenAndMember, authenticateToken } = require('./authToken')
 const Product = db.models.Product
 const ProductBatch = db.models.ProductBatch
 const ProductLog = db.models.ProductLog
@@ -8,7 +9,7 @@ const Brand = db.models.Brand
 const User = db.models.User
 const Location = db.models.Location
 
-router.post('/', async (req, res) => {
+router.post('/', authenticateTokenAndAdmin, async (req, res) => {
     Product.create({
         name: req.body.name,
         desc: req.body.desc,
@@ -18,7 +19,7 @@ router.post('/', async (req, res) => {
         .catch(err => res.status(500).send(err))
 })
 
-router.post('/brand', async (req, res) => {
+router.post('/brand', authenticateTokenAndAdmin, async (req, res) => {
     Brand.create({
         name: req.body.name
     })
@@ -26,10 +27,9 @@ router.post('/brand', async (req, res) => {
         .catch(err => res.status(500).send(err))
 })
 
-router.post('/log', async (req, res) => {
+router.post('/log', authenticateTokenAndMember, async (req, res) => {
     try {
-        console.log(req.body)
-
+        console.log(req.user)
         const product = await Product.findOne({
             where: {
                 id: req.body.productId
@@ -49,9 +49,10 @@ router.post('/log', async (req, res) => {
             const log = await ProductLog.create({
                 productId: req.body.productId,
                 batchNo: req.body.batchNo,
-                user: req.body.user,
+                user: req.user.id,
                 inout: req.body.inOut,
-                qty: req.body.qty
+                qty: req.body.qty,
+                location: req.body.location.id
             })
 
             await Product.update({
@@ -94,7 +95,7 @@ router.post('/log', async (req, res) => {
                     ProductLog.create({
                         productId: req.body.productId,
                         batchNo: batch.batchNo,
-                        user: req.body.user,
+                        user: req.user.id,
                         inout: req.body.inOut,
                         qty: remainder,
                         location: req.body.location.id
@@ -105,7 +106,7 @@ router.post('/log', async (req, res) => {
                     ProductLog.create({
                         productId: req.body.productId,
                         batchNo: batch.batchNo,
-                        user: req.body.user,
+                        user: req.user.id,
                         inout: req.body.inOut,
                         qty: batch.qty,
                         location: req.body.location.id
@@ -138,7 +139,7 @@ router.post('/log', async (req, res) => {
     }
 })
 
-router.get('/logs', async (req, res) => {
+router.get('/logs', authenticateToken, async (req, res) => {
     try {
         let logs
         let sortBy
@@ -189,7 +190,7 @@ router.get('/logs', async (req, res) => {
     }
 })
 
-router.get('/:id/batches', async (req, res) => {
+router.get('/:id/batches', authenticateToken, async (req, res) => {
     try {
         let batches
         let sortBy
@@ -234,7 +235,7 @@ router.get('/:id/batches', async (req, res) => {
     }
 })
 
-router.get('/batch/:id', async (req, res) => {
+router.get('/batch/:id', authenticateToken, async (req, res) => {
     ProductBatch.findOne({
         include: [{
             model: Location,
@@ -254,7 +255,7 @@ router.get('/brands', async (req, res) => {
         .catch(err => res.status(500).send(err))
 })
 
-router.get('/:id/logs', async (req, res) => {
+router.get('/:id/logs', authenticateToken, async (req, res) => {
     try {
         let logs
         let sortBy
@@ -307,7 +308,7 @@ router.get('/:id/logs', async (req, res) => {
     }
 })
 
-router.get('/:brand/logs', async (req, res) => {
+router.get('/:brand/logs', authenticateToken, async (req, res) => {
     try {
         const logs = await ProductLog.findAll({
             include: [{
@@ -326,38 +327,35 @@ router.get('/:brand/logs', async (req, res) => {
     }
 })
 
-router.get('/log/:id', async (req, res) => {
+router.get('/log/:id', authenticateToken, async (req, res) => {
     try {
         const log = await ProductLog.findOne({
+            include: [
+                {
+                    model: Location,
+                    attributes: ['name']
+                },
+                {
+                    model: Product,
+                    attributes: ['name']
+                },
+                {
+                    model: User,
+                    attributes: ['firstName', 'lastName']
+                }
+            ],
             where: {
                 id: req.params.id
             }
-        }).catch(err => console.log(err))
-
-        if (!log) {
-            console.error('Invalid id')
-            res.status(400).send("Invalid id")
-        } else {
-            const batch = await ProductBatch.findOne({
-                include: [{
-                    model: Location,
-                    required: true
-                }],
-                where: {
-                    productId: log.dataValues.productId,
-                    batchNo: log.dataValues.batchNo
-                }
-            }).catch(err => console.log(err))
-
-            res.status(200).send({ log: log, batch: batch })
-        }
+        })
+        res.status(200).send({ ...log.dataValues })
     } catch (err) {
         console.error(err)
         res.status(500).send(err)
     }
 })
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
     try {
         const product = await Product.findOne({
             where: {
@@ -371,7 +369,7 @@ router.get('/:id', async (req, res) => {
     }
 })
 
-router.get('/brand/:brand', async (req, res) => {
+router.get('/brand/:brand', authenticateToken, async (req, res) => {
     try {
         let products
         if (req.query.search) {
@@ -410,7 +408,7 @@ router.get('/brand/:brand', async (req, res) => {
     }
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateTokenAndMember, async (req, res) => {
     try {
         await Product.update(req.body, {
             where: {

@@ -16,6 +16,13 @@ module.exports = (sequelize, DataTypes) => {
         batchNo: {
             type: DataTypes.STRING(255)
         },
+        location: {
+            type: DataTypes.INTEGER,
+            references: {
+                model: 'Locations',
+                key: 'id'
+            }
+        },
         user: {
             type: DataTypes.INTEGER,
             references: {

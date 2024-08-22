@@ -1,8 +1,9 @@
 const router = require('express').Router()
 const db = require('../db')
+const { authenticateTokenAndAdmin, authenticateToken } = require('./authToken')
 const Supplier = db.models.Supplier
 
-router.post('/', async (req, res) => {
+router.post('/', authenticateTokenAndAdmin, async (req, res) => {
     Supplier.create({
         region: req.body.region,
         name: req.body.name,
@@ -15,7 +16,7 @@ router.post('/', async (req, res) => {
         .catch(err => res.status(500).send(err))
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateTokenAndAdmin, async (req, res) => {
     Supplier.update(req.body, {
         where: {
             id: req.params.id
@@ -28,13 +29,13 @@ router.put('/:id', async (req, res) => {
         })
 })
 
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     Supplier.findAll()
         .then(data => res.status(200).send(data))
         .catch(err => res.status(500).send(err))
 })
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
     Supplier.findOne({
         where: {
             id: req.params.id

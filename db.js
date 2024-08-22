@@ -1,6 +1,6 @@
 const { Sequelize, DataTypes } = require('sequelize')
 
-const hostName = process.env.NODE_ENV === 'production' ? 'uventory-app.cxaym6qgaqo3.ap-southeast-2.rds.amazonaws.com' : 'localhost'
+const hostName = process.env.NODE_ENV === 'production' ? process.env.DB : 'localhost'
 const username = process.env.NODE_ENV === 'production' ? 'admin' : 'root'
 const password = process.env.NOVE_ENV === 'production' ? process.env.DB_PASSWORD : 'admin'
 
@@ -35,11 +35,13 @@ IngredientBatch.belongsTo(Location, { foreignKey: 'location' })
 IngredientLog.belongsTo(Ingredient, { foreignKey: 'ingredientId' });
 IngredientLog.belongsTo(Location, { foreignKey: 'location' })
 IngredientLog.belongsTo(Product, { foreignKey: 'inProduct' })
+IngredientLog.belongsTo(User, { foreignKey: 'user' })
 Product.belongsTo(Brand, { foreignKey: 'brand' })
 ProductBatch.belongsTo(Product, { foreignKey: 'productId' });
 ProductBatch.belongsTo(Location, { foreignKey: 'location' })
 ProductLog.belongsTo(Product, { foreignKey: 'productId' })
 ProductLog.belongsTo(User, { foreignKey: 'user' })
+ProductLog.belongsTo(Location, { foreignKey: 'location' })
 
 sequelize.authenticate()
     .then(() => console.log("Database connected"))

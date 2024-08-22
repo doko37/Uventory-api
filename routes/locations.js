@@ -1,8 +1,9 @@
 const router = require('express').Router()
 const db = require('../db')
+const { authenticateTokenAndAdmin, authenticateToken } = require('./authToken')
 const Location = db.models.Location
 
-router.post('/', async (req, res) => {
+router.post('/', authenticateTokenAndAdmin, async (req, res) => {
     Location.create({
         name: req.body.name
     })
@@ -10,7 +11,7 @@ router.post('/', async (req, res) => {
         .catch(err => res.status(500).send(err))
 })
 
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     Location.findAll()
         .then(data => res.status(200).send(data))
         .catch(err => res.status(500).send(err))

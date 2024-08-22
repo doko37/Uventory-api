@@ -7,11 +7,11 @@ const { authenticateTokenAndMember } = require('./authToken')
 const { authenticateToken } = require('./authToken')
 const User = db.models.User
 const RefreshToken = db.models.RefreshToken
-const tokenSecret = '54d13edf92d5f9aaa392631dec24fd79baceb2d34328cc4e8ad237cb6d871b1ecf2ac5d1b549005cef6a03e89360090749f0defc5cfd4362f08423a6c2b4796bd30dafab06050b097dc4247056d10e78'
-const refreshSecret = 'b8c73fd0d6b6786094c83b3a94559f9d5d7188652cf8ae38fab23f4a7ed5914a25c8649101273deb66ac54f3362d4b17b192075d4cf32af5e88dae9249b9fdd5a6ed8d25a8fde72a706115d6883bfec5'
+const tokenSecret = process.env.TOKEN_SECRET
+const refreshSecret = process.env.REFRESH_SECRET
 
 const generateToken = (user) => {
-    return jwt.sign(user, tokenSecret, { expiresIn: '15s' })
+    return jwt.sign(user, tokenSecret, { expiresIn: '10m' })
 }
 
 router.get('/users', authenticateTokenAndAdmin, async (req, res) => {
@@ -36,12 +36,8 @@ router.get('/user/:id', authenticateToken, async (req, res) => {
 
 router.post('/token', async (req, res) => {
     try {
-        console.log(req.body)
         const refreshToken = req.body.token
-        if (!refreshToken) {
-            console.log(refreshToken)
-            return res.sendStatus(401)
-        }
+        if (!refreshToken) return res.sendStatus(401)
         const token = await RefreshToken.findOne({
             where: {
                 token: refreshToken
@@ -50,7 +46,7 @@ router.post('/token', async (req, res) => {
         if (!token) return res.sendStatus(403)
         jwt.verify(refreshToken, refreshSecret, (err, user) => {
             if (err) return res.sendStatus(403)
-            const { password, ...rest } = user.user
+            const { password, ...rest } = user
             const accessToken = generateToken(rest)
             return res.status(200).send({ token: accessToken })
         })
@@ -71,10 +67,8 @@ router.post('/login', async (req, res) => {
         const match = bcrypt.compareSync(req.body.password, user.password)
         if (match) {
             const { password, ...rest } = user.dataValues
-            const signedUser = { user: rest }
-            console.log(signedUser)
-            const token = generateToken(signedUser)
-            const refreshToken = jwt.sign(signedUser, refreshSecret)
+            const token = generateToken(rest)
+            const refreshToken = jwt.sign(rest, refreshSecret)
             await RefreshToken.create({ token: refreshToken })
             res.status(200).send({ accessToken: token, refreshToken: refreshToken, access: rest.access })
         } else {

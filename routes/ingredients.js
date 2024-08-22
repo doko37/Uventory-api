@@ -8,6 +8,7 @@ const IngredientBatch = db.models.IngredientBatch
 const IngredientLog = db.models.IngredientLog
 const Location = db.models.Location
 const Product = db.models.Product
+const User = db.models.User
 const { authenticateTokenAndAdmin } = require('./authToken')
 const { authenticateTokenAndMember } = require('./authToken')
 const { authenticateToken } = require('./authToken')
@@ -40,8 +41,8 @@ router.post('/category', authenticateTokenAndAdmin, async (req, res) => {
 
 router.post('/log', authenticateTokenAndMember, async (req, res) => {
     const inOut = req.body.inOut
+    console.log(req.user)
     try {
-
         const ingredient = await Ingredient.findOne({
             where: {
                 id: req.body.ingredientId
@@ -52,7 +53,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 ingredientId: req.body.ingredientId,
                 batchNo: req.body.batchNo,
                 location: req.body.location.id,
-                user: `${req.user.firstName} ${req.user.lastName}`,
+                user: req.user.id,
                 inout: 'in',
                 qty: req.body.qty,
                 remark: req.body.remark
@@ -105,7 +106,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 ingredientId: req.body.ingredientId,
                 batchNo: batch.batchNo,
                 location: req.body.location.id,
-                user: `${req.user.firstName} ${req.user.lastName}`,
+                user: req.user.id,
                 inout: 'out',
                 qty: req.body.qty,
                 remark: req.body.remark,
@@ -153,7 +154,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                             ingredientId: req.body.ingredientId,
                             batchNo: batch.batchNo,
                             location: batch.location,
-                            user: `${req.user.firstName} ${req.user.lastName}`,
+                            user: req.user.id,
                             inout: 'out',
                             qty: remainder,
                             remark: req.body.remark,
@@ -170,7 +171,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                             ingredientId: req.body.ingredientId,
                             batchNo: batch.batchNo,
                             location: batch.location,
-                            user: `${req.user.firstName} ${req.user.lastName}`,
+                            user: req.user.id,
                             inout: 'out',
                             qty: batch.qty,
                             remark: req.body.remark,
@@ -396,6 +397,10 @@ router.get('/log/:id', authenticateToken, async (req, res) => {
                 {
                     model: Product,
                     attributes: ['name']
+                },
+                {
+                    model: User,
+                    attributes: ['firstName', 'lastName']
                 }
             ],
             where: {
