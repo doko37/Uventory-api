@@ -1,13 +1,13 @@
 module.exports = (sequelize, DataTypes) => {
     const IngredientLog = sequelize.define('IngredientLog', {
         id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.UUID,
+            defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
             unique: true,
-            autoIncrement: true
         },
         ingredientId: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Ingredients',
                 key: 'id'
@@ -17,14 +17,14 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING(255)
         },
         location: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Locations',
                 key: 'id'
             }
         },
         user: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Users',
                 key: 'id'
@@ -37,7 +37,7 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.FLOAT
         },
         inProduct: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Products',
                 key: 'id'

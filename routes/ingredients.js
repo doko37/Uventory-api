@@ -9,6 +9,7 @@ const IngredientLog = db.models.IngredientLog
 const Location = db.models.Location
 const Product = db.models.Product
 const User = db.models.User
+const Notification = db.models.Notification
 const { authenticateTokenAndAdmin } = require('./authToken')
 const { authenticateTokenAndMember } = require('./authToken')
 const { authenticateToken } = require('./authToken')
@@ -29,6 +30,30 @@ router.post('/', authenticateTokenAndAdmin, async (req, res) => {
             console.error(err)
             res.status(500).send(err)
         })
+})
+
+router.post('/resetCategories', authenticateTokenAndAdmin, async (req, res) => {
+    const ingredientCategories = [
+        'Dairy',
+        'Bee',
+        'Other-animal',
+        'Oil-Liquid',
+        'UB-Products',
+        'Caps',
+        'Labels',
+        'Boxes',
+        'Capsules',
+        'Tablets',
+        'Evergreen',
+        'Nu-Wise',
+        'Other'
+    ];
+
+    ingredientCategories.forEach(async (category) => {
+        await IngredientCategory.create({ name: category });
+    });
+
+    res.sendStatus(200)
 })
 
 router.post('/category', authenticateTokenAndAdmin, async (req, res) => {
@@ -68,138 +93,152 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 location: req.body.location.id
             }).catch(err => console.error(err))
 
-            await Ingredient.update({
+            let payload = {
                 qty: ingredient.qty + req.body.qty
-            }, {
+            }
+            if (ingredient.qty + req.body.qty > ingredient.stockAlert && ingredient.alertDismissed) {
+                payload.alertDismissed = false
+            }
+
+            await Ingredient.update(payload, {
                 where: {
                     id: req.body.ingredientId
                 }
             }).catch(err => console.error(err))
 
-            res.status(200).send(log)
-        } else if (req.body.singleBatch) {
-            const batch = await IngredientBatch.findOne({
-                where: {
-                    ingredientId: req.body.ingredientId,
-                    batchNo: req.body.batchNo
-                }
-            })
 
-            if (req.body.qty === batch.qty) {
-                IngredientBatch.destroy({
+            res.status(200).send(log)
+        } else {
+            if (req.body.singleBatch) {
+                const batch = await IngredientBatch.findOne({
                     where: {
-                        id: batch.id
+                        ingredientId: req.body.ingredientId,
+                        batchNo: req.body.batchNo
                     }
                 })
 
-            } else {
-                IngredientBatch.update({
-                    qty: batch.qty - req.body.qty
+                if (req.body.qty === batch.qty) {
+                    IngredientBatch.destroy({
+                        where: {
+                            id: batch.id
+                        }
+                    })
+
+                } else {
+                    IngredientBatch.update({
+                        qty: batch.qty - req.body.qty
+                    }, {
+                        where: {
+                            id: batch.id
+                        }
+                    })
+                }
+
+                IngredientLog.create({
+                    ingredientId: req.body.ingredientId,
+                    batchNo: batch.batchNo,
+                    location: req.body.location.id,
+                    user: req.user.id,
+                    inout: 'out',
+                    qty: req.body.qty,
+                    remark: req.body.remark,
+                    inProduct: req.body.inProduct
+                })
+
+                await Ingredient.update({
+                    qty: ingredient.qty - req.body.qty
                 }, {
                     where: {
-                        id: batch.id
+                        id: req.body.ingredientId
                     }
                 })
-            }
-
-            IngredientLog.create({
-                ingredientId: req.body.ingredientId,
-                batchNo: batch.batchNo,
-                location: req.body.location.id,
-                user: req.user.id,
-                inout: 'out',
-                qty: req.body.qty,
-                remark: req.body.remark,
-                inProduct: req.body.inProduct
-            })
-
-            await Ingredient.update({
-                qty: ingredient.qty - req.body.qty
-            }, {
-                where: {
-                    id: req.body.ingredientId
+            } else {
+                let remainder = req.body.qty
+                if (remainder > ingredient.qty) {
+                    res.status(400).send("Invalid qty")
+                    return
                 }
-            })
+                const batches = await IngredientBatch.findAll({
+                    where: {
+                        ingredientId: req.body.ingredientId
+                    },
+                    order: [
+                        ['expDate', 'ASC']
+                    ]
+                })
 
-            res.status(200).send("Load out successful")
-        } else {
-            let remainder = req.body.qty
-            if (remainder > ingredient.qty) {
-                res.status(400).send("Invalid qty")
-                return
-            }
-            const batches = await IngredientBatch.findAll({
-                where: {
-                    ingredientId: req.body.ingredientId
-                },
-                order: [
-                    ['expDate', 'ASC']
-                ]
-            })
+                let index = 0
+                while (remainder > 0) {
+                    const batch = batches[index]
+                    if (remainder < batch.qty) {
+                        try {
+                            IngredientBatch.update({
+                                qty: batch.qty - remainder
+                            }, {
+                                where: {
+                                    id: batch.id
+                                }
+                            })
 
-            let index = 0
-            while (remainder > 0) {
-                const batch = batches[index]
-                if (remainder < batch.qty) {
-                    try {
-                        IngredientBatch.update({
-                            qty: batch.qty - remainder
-                        }, {
-                            where: {
-                                id: batch.id
-                            }
-                        })
+                            IngredientLog.create({
+                                ingredientId: req.body.ingredientId,
+                                batchNo: batch.batchNo,
+                                location: batch.location,
+                                user: req.user.id,
+                                inout: 'out',
+                                qty: remainder,
+                                remark: req.body.remark,
+                                inProduct: req.body.inProduct
+                            })
 
-                        IngredientLog.create({
-                            ingredientId: req.body.ingredientId,
-                            batchNo: batch.batchNo,
-                            location: batch.location,
-                            user: req.user.id,
-                            inout: 'out',
-                            qty: remainder,
-                            remark: req.body.remark,
-                            inProduct: req.body.inProduct
-                        })
+                            remainder = 0
+                        } catch (err) {
+                            res.status(500).send(err)
+                        }
+                    } else {
+                        try {
+                            IngredientLog.create({
+                                ingredientId: req.body.ingredientId,
+                                batchNo: batch.batchNo,
+                                location: batch.location,
+                                user: req.user.id,
+                                inout: 'out',
+                                qty: batch.qty,
+                                remark: req.body.remark,
+                                inProduct: req.body.inProduct
+                            })
 
-                        remainder = 0
-                    } catch (err) {
-                        res.status(500).send(err)
+                            IngredientBatch.destroy({
+                                where: {
+                                    id: batch.id
+                                }
+                            })
+
+                            remainder -= batch.qty
+                        } catch (err) {
+                            res.status(500).send(err)
+                        }
                     }
-                } else {
-                    try {
-                        IngredientLog.create({
-                            ingredientId: req.body.ingredientId,
-                            batchNo: batch.batchNo,
-                            location: batch.location,
-                            user: req.user.id,
-                            inout: 'out',
-                            qty: batch.qty,
-                            remark: req.body.remark,
-                            inProduct: req.body.inProduct
-                        })
 
-                        IngredientBatch.destroy({
-                            where: {
-                                id: batch.id
-                            }
-                        })
-
-                        remainder -= batch.qty
-                    } catch (err) {
-                        res.status(500).send(err)
+                    index++;
+                }
+                await Ingredient.update({
+                    qty: ingredient.qty - req.body.qty
+                }, {
+                    where: {
+                        id: req.body.ingredientId
                     }
-                }
+                })
 
-                index++;
             }
-            await Ingredient.update({
-                qty: ingredient.qty - req.body.qty
-            }, {
-                where: {
-                    id: req.body.ingredientId
-                }
-            })
-
+            if (ingredient.qty - req.body.qty < ingredient.stockAlert && !ingredient.alertDismissed) {
+                const msg = `${ingredient.name} qty is low! (${(ingredient.qty - req.body.qty).toFixed(3)}${ingredient.unit}/${ingredient.stockAlert.toFixed(3)}${ingredient.unit})`
+                Notification.create({
+                    ingredientId: ingredient.id,
+                    type: 'lowStock',
+                    msg: msg
+                })
+            }
             res.status(200).send("Load out successful")
         }
     } catch (err) {
@@ -210,8 +249,8 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
 
 router.get('/', authenticateToken, async (req, res) => {
     let whereCondition = {}
+    console.log('get ingredient')
 
-    console.log(req.query.search)
     if (req.query.search) {
         whereCondition[Op.or] = [
             { name: { [Op.like]: `%${req.query.search}%` } },
@@ -229,7 +268,7 @@ router.get('/', authenticateToken, async (req, res) => {
         })
         res.status(200).send(ingredients)
     } catch (err) {
-        console.error(err)
+        console.error("get ingredient error:", err)
         res.status(500).send(err)
     }
 })
@@ -415,6 +454,22 @@ router.get('/log/:id', authenticateToken, async (req, res) => {
     }
 })
 
+router.get('/reserved', authenticateTokenAndMember, async (req, res) => {
+    try {
+        const users = await User.findAll({
+            attributes: ['id', 'firstName', 'lastName', 'reservedIngredient', 'updatedAt'],
+            where: {
+                reservedIngredient: {
+                    [Op.ne]: null
+                }
+            }
+        })
+        return res.status(200).send(users)
+    } catch (err) {
+        console.error(err)
+    }
+})
+
 router.get('/:id', authenticateToken, async (req, res) => {
     Ingredient.findOne({
         where: {
@@ -427,6 +482,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
 router.get('/category/:category', authenticateToken, async (req, res) => {
     try {
+        console.log('hi')
         let ingredients
         let sortBy
         if (req.query.sortBy === 'Stock Alert') {
@@ -466,6 +522,32 @@ router.get('/category/:category', authenticateToken, async (req, res) => {
         console.error(err)
         res.status(500).send(err)
     }
+})
+
+router.put('/reserve/:id', authenticateTokenAndMember, async (req, res) => {
+    User.update({
+        reservedIngredient: req.params.id
+    }, {
+        where: {
+            id: req.user.id
+        }
+    }).then(() => res.sendStatus(200)).catch(err => {
+        console.error(err)
+        return res.sendStatus(500)
+    })
+})
+
+router.put('/unreserve', authenticateTokenAndMember, async (req, res) => {
+    User.update({
+        reservedIngredient: null
+    }, {
+        where: {
+            id: req.user.id
+        }
+    }).then(() => res.sendStatus(200)).catch(err => {
+        console.error(err)
+        return res.sendStatus(500)
+    })
 })
 
 router.put('/:id', authenticateTokenAndMember, async (req, res) => {

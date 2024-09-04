@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
     const Product = sequelize.define('Product', {
         id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             primaryKey: true,
             unique: true,
             autoIncrement: true
@@ -22,7 +22,7 @@ module.exports = (sequelize, DataTypes) => {
             }
         },
         qty: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             defaultValue: 0
         },
         memo: {

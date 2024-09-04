@@ -11,8 +11,69 @@ const tokenSecret = process.env.TOKEN_SECRET
 const refreshSecret = process.env.REFRESH_SECRET
 
 const generateToken = (user) => {
-    return jwt.sign(user, tokenSecret, { expiresIn: '10m' })
+    const payload = {
+        ...user,
+        iat: Math.floor(Date.now() / 1000)
+    }
+    return jwt.sign(payload, tokenSecret, { expiresIn: '10m' })
 }
+
+router.post('/token', async (req, res) => {
+    try {
+        const refreshToken = req.body.token
+        if (!refreshToken) return res.sendStatus(401)
+        const token = await RefreshToken.findOne({
+            where: {
+                token: refreshToken
+            }
+        })
+        if (!token) return res.sendStatus(401)
+        jwt.verify(refreshToken, refreshSecret, async (err, user) => {
+            if (err) {
+                await RefreshToken.destroy({
+                    where: {
+                        token: refreshToken
+                    }
+                })
+                return res.sendStatus(403)
+            }
+            const { password, exp, ...rest } = user
+            console.log(rest)
+            const accessToken = generateToken(rest)
+            console.log("new token:", accessToken)
+            return res.status(200).send({ token: accessToken })
+        })
+    } catch (err) {
+        console.error(err)
+        res.sendStatus(500)
+    }
+})
+
+router.post('/login', async (req, res) => {
+    try {
+        const user = await User.findOne({
+            where: {
+                email: req.body.email
+            }
+        })
+
+        if (!user) return res.sendStatus(401)
+
+        const match = bcrypt.compareSync(req.body.password, user.password)
+        if (match) {
+            const { password, ...rest } = user.dataValues
+            const token = generateToken(rest)
+            const refreshToken = jwt.sign(rest, refreshSecret, { expiresIn: '1h' })
+            await RefreshToken.create({ token: refreshToken })
+            res.status(200).send({ accessToken: token, refreshToken: refreshToken, access: rest.access, id: rest.id })
+        } else {
+            res.sendStatus(401)
+        }
+    } catch (err) {
+        console.error(err)
+        res.sendStatus(500)
+    }
+})
 
 router.get('/users', authenticateTokenAndAdmin, async (req, res) => {
     User.findAll({
@@ -32,52 +93,6 @@ router.get('/users', authenticateTokenAndAdmin, async (req, res) => {
 router.get('/user/:id', authenticateToken, async (req, res) => {
     if (req.user.id != req.params.id) return res.sendStatus(403)
     else return res.status(200).send(req.user)
-})
-
-router.post('/token', async (req, res) => {
-    try {
-        const refreshToken = req.body.token
-        if (!refreshToken) return res.sendStatus(401)
-        const token = await RefreshToken.findOne({
-            where: {
-                token: refreshToken
-            }
-        })
-        if (!token) return res.sendStatus(403)
-        jwt.verify(refreshToken, refreshSecret, (err, user) => {
-            if (err) return res.sendStatus(403)
-            const { password, ...rest } = user
-            const accessToken = generateToken(rest)
-            return res.status(200).send({ token: accessToken })
-        })
-    } catch (err) {
-        console.error(err)
-        res.sendStatus(500)
-    }
-})
-
-router.post('/login', async (req, res) => {
-    try {
-        const user = await User.findOne({
-            where: {
-                email: req.body.email
-            }
-        })
-
-        const match = bcrypt.compareSync(req.body.password, user.password)
-        if (match) {
-            const { password, ...rest } = user.dataValues
-            const token = generateToken(rest)
-            const refreshToken = jwt.sign(rest, refreshSecret)
-            await RefreshToken.create({ token: refreshToken })
-            res.status(200).send({ accessToken: token, refreshToken: refreshToken, access: rest.access })
-        } else {
-            res.sendStatus(401)
-        }
-    } catch (err) {
-        console.error(err)
-        res.sendStatus(500)
-    }
 })
 
 router.post('/logout', async (req, res) => {

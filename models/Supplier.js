@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
     const Supplier = sequelize.define('Supplier', {
         id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             primaryKey: true,
             unique: true,
             autoIncrement: true

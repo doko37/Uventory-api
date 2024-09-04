@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
     const Ingredient = sequelize.define('Ingredient', {
         id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             primaryKey: true,
             unique: true,
             autoIncrement: true
@@ -23,7 +23,7 @@ module.exports = (sequelize, DataTypes) => {
             }
         },
         supplier: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             isNull: false,
             references: {
                 model: 'Suppliers',
@@ -43,15 +43,15 @@ module.exports = (sequelize, DataTypes) => {
             isNull: false,
             defaultValue: 0
         },
-        qtyLevel: {
-            type: DataTypes.ENUM('high', 'medium', 'low'),
-            defaultValue: 'low'
-        },
         ed: {
             type: DataTypes.ENUM('Yes', 'No')
         },
         reciever: {
             type: DataTypes.STRING(255)
+        },
+        alertDismissed: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
         }
     })
 

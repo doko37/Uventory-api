@@ -32,7 +32,10 @@ router.put('/:id', authenticateTokenAndAdmin, async (req, res) => {
 router.get('/', authenticateToken, async (req, res) => {
     Supplier.findAll()
         .then(data => res.status(200).send(data))
-        .catch(err => res.status(500).send(err))
+        .catch(err => {
+            console.error(err)
+            res.status(500).send(err)
+        })
 })
 
 router.get('/:id', authenticateToken, async (req, res) => {

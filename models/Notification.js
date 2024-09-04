@@ -1,42 +1,46 @@
 module.exports = (sequelize, DataTypes) => {
-    const IngredientBatch = sequelize.define('IngredientBatch', {
+    const Notification = sequelize.define('Notification', {
         id: {
             type: DataTypes.UUID,
             defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
             unique: true,
         },
-        batchNo: {
-            type: DataTypes.STRING(255)
+        batchId: {
+            type: DataTypes.UUID,
+            allowNull: true,
+            references: {
+                model: 'IngredientBatches',
+                key: 'id'
+            },
         },
         ingredientId: {
             type: DataTypes.INTEGER.UNSIGNED,
+            allowNull: true,
             references: {
                 model: 'Ingredients',
                 key: 'id'
-            }
+            },
         },
-        expDate: {
-            type: DataTypes.DATE
-        },
-        poDate: {
-            type: DataTypes.DATE
-        },
-        qty: {
-            type: DataTypes.FLOAT
-        },
-        location: {
+        user: {
             type: DataTypes.INTEGER.UNSIGNED,
+            allowNull: true,
             references: {
-                model: 'Locations',
+                model: 'Users',
                 key: 'id'
             }
         },
-        alertDismissed: {
+        type: {
+            type: DataTypes.ENUM('lowStock', 'expiryDate')
+        },
+        dismissed: {
             type: DataTypes.BOOLEAN,
             defaultValue: false
+        },
+        msg: {
+            type: DataTypes.TEXT,
         }
     })
 
-    return IngredientBatch
+    return Notification
 }
