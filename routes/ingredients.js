@@ -14,6 +14,19 @@ const { authenticateTokenAndAdmin } = require('./authToken')
 const { authenticateTokenAndMember } = require('./authToken')
 const { authenticateToken } = require('./authToken')
 
+const unitMap = new Map()
+unitMap.set('mg', 0)
+unitMap.set('g', 1)
+unitMap.set('kg', 2)
+unitMap.set('ml', 3)
+unitMap.set('l', 4)
+
+const convertUnits = (fromUnit, toUnit, amount) => {
+    if(fromUnit === toUnit || fromUnit === 'ea') return amount
+    const multiplier = Math.pow(1000, (unitMap.get(fromUnit) - unitMap.get(toUnit)))
+    return amount*multiplier
+}
+
 router.post('/', authenticateTokenAndAdmin, async (req, res) => {
     Ingredient.create({
         code: req.body.code,
@@ -73,6 +86,8 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 id: req.body.ingredientId
             }
         })
+
+        const qty = convertUnits(req.body.unit, ingredient.unit, req.body.qty)
         if (inOut === 'in') {
             const log = await IngredientLog.create({
                 ingredientId: req.body.ingredientId,
@@ -80,7 +95,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 location: req.body.location.id,
                 user: req.user.id,
                 inout: 'in',
-                qty: req.body.qty,
+                qty: qty,
                 remark: req.body.remark
             }).catch(err => console.error(err))
 
@@ -89,14 +104,14 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 ingredientId: req.body.ingredientId,
                 expDate: req.body.expDate,
                 poDate: req.body.poDate,
-                qty: req.body.qty,
+                qty: qty,
                 location: req.body.location.id
             }).catch(err => console.error(err))
 
             let payload = {
-                qty: ingredient.qty + req.body.qty
+                qty: ingredient.qty + qty
             }
-            if (ingredient.qty + req.body.qty > ingredient.stockAlert && ingredient.alertDismissed) {
+            if (ingredient.qty + qty > ingredient.stockAlert && ingredient.alertDismissed) {
                 payload.alertDismissed = false
             }
 
@@ -126,7 +141,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
 
                 } else {
                     IngredientBatch.update({
-                        qty: batch.qty - req.body.qty
+                        qty: batch.qty - qty
                     }, {
                         where: {
                             id: batch.id
@@ -140,20 +155,20 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                     location: req.body.location.id,
                     user: req.user.id,
                     inout: 'out',
-                    qty: req.body.qty,
+                    qty: qty,
                     remark: req.body.remark,
                     inProduct: req.body.inProduct
                 })
 
                 await Ingredient.update({
-                    qty: ingredient.qty - req.body.qty
+                    qty: ingredient.qty - qty
                 }, {
                     where: {
                         id: req.body.ingredientId
                     }
                 })
             } else {
-                let remainder = req.body.qty
+                let remainder = qty
                 if (remainder > ingredient.qty) {
                     res.status(400).send("Invalid qty")
                     return
@@ -223,7 +238,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                     index++;
                 }
                 await Ingredient.update({
-                    qty: ingredient.qty - req.body.qty
+                    qty: ingredient.qty - qty
                 }, {
                     where: {
                         id: req.body.ingredientId
@@ -231,8 +246,8 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 })
 
             }
-            if (ingredient.qty - req.body.qty < ingredient.stockAlert && !ingredient.alertDismissed) {
-                const msg = `${ingredient.name} qty is low! (${(ingredient.qty - req.body.qty).toFixed(3)}${ingredient.unit}/${ingredient.stockAlert.toFixed(3)}${ingredient.unit})`
+            if (ingredient.qty - qty < ingredient.stockAlert && !ingredient.alertDismissed) {
+                const msg = `${ingredient.name} qty is low! (${(ingredient.qty - qty).toFixed(3)}${ingredient.unit}/${ingredient.stockAlert.toFixed(3)}${ingredient.unit})`
                 Notification.create({
                     ingredientId: ingredient.id,
                     type: 'lowStock',
@@ -435,7 +450,8 @@ router.get('/log/:id', authenticateToken, async (req, res) => {
                 },
                 {
                     model: Product,
-                    attributes: ['name']
+                    attributes: ['name'],
+                    required: false
                 },
                 {
                     model: User,
@@ -446,6 +462,8 @@ router.get('/log/:id', authenticateToken, async (req, res) => {
                 id: req.params.id
             }
         })
+
+        console.log(log)
 
         res.status(200).send({ ...log.dataValues })
     } catch (err) {
