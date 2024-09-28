@@ -22,9 +22,9 @@ unitMap.set('ml', 3)
 unitMap.set('l', 4)
 
 const convertUnits = (fromUnit, toUnit, amount) => {
-    if(fromUnit === toUnit || fromUnit === 'ea') return amount
+    if (fromUnit === toUnit || fromUnit === 'ea') return amount
     const multiplier = Math.pow(1000, (unitMap.get(fromUnit) - unitMap.get(toUnit)))
-    return amount*multiplier
+    return amount * multiplier
 }
 
 router.post('/', authenticateTokenAndAdmin, async (req, res) => {
@@ -38,7 +38,10 @@ router.post('/', authenticateTokenAndAdmin, async (req, res) => {
         ed: req.body.ed,
         reciever: req.body.reciever
     })
-        .then(data => res.status(200).send(data.toJSON()))
+        .then(data => {
+            req.io.emit('new_ingredient')
+            res.status(200).send(data.toJSON())
+        })
         .catch(err => {
             console.error(err)
             res.status(500).send(err)
@@ -256,6 +259,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
             }
             res.status(200).send("Load out successful")
         }
+        req.io.emit('log_ingredient', { id: req.user.id })
     } catch (err) {
         console.error(err)
         res.status(500).send(err)
@@ -463,8 +467,6 @@ router.get('/log/:id', authenticateToken, async (req, res) => {
             }
         })
 
-        console.log(log)
-
         res.status(200).send({ ...log.dataValues })
     } catch (err) {
         console.error(err)
@@ -500,7 +502,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
 router.get('/category/:category', authenticateToken, async (req, res) => {
     try {
-        console.log('hi')
         let ingredients
         let sortBy
         if (req.query.sortBy === 'Stock Alert') {
@@ -577,6 +578,35 @@ router.put('/:id', authenticateTokenAndMember, async (req, res) => {
         })
 
         res.status(200).send(`Updated ingredient (ID: ${req.params.id})`)
+    } catch (err) {
+        console.error(err)
+        res.status(500).send(err)
+    }
+})
+
+router.put('/batch/:id', authenticateTokenAndAdmin, async (req, res) => {
+    try {
+        const batch = await IngredientBatch.findOne({
+            where: {
+                id: req.params.id
+            }
+        })
+
+        await IngredientBatch.update(req.body, {
+            where: {
+                id: req.params.id
+            }
+        })
+
+        if (req.body.qty) {
+            const diff = req.body.qty - batch.qty
+            await Ingredient.update(
+                { qty: Sequelize.literal(`qty + ${diff}`) },
+                { where: { id: batch.ingredientId } }
+            )
+        }
+
+        res.status(200).send(`Updated ingredient batch (ID: ${req.params.id})`)
     } catch (err) {
         console.error(err)
         res.status(500).send(err)

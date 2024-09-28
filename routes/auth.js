@@ -15,7 +15,7 @@ const generateToken = (user) => {
         ...user,
         iat: Math.floor(Date.now() / 1000)
     }
-    return jwt.sign(payload, tokenSecret, { expiresIn: '10m' })
+    return jwt.sign(payload, tokenSecret, { expiresIn: '10s' })
 }
 
 router.post('/token', async (req, res) => {
