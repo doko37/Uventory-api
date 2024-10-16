@@ -6,15 +6,15 @@ module.exports = (sequelize, DataTypes) => {
             primaryKey: true,
             unique: true,
         },
-        batchNo: {
-            type: DataTypes.STRING(255)
-        },
         ingredientId: {
             type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Ingredients',
                 key: 'id'
             }
+        },
+        batchNo: {
+            type: DataTypes.STRING(255)
         },
         expDate: {
             type: DataTypes.DATE

@@ -3,12 +3,13 @@ const tokenSecret = process.env.TOKEN_SECRET
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization']
+    console.log(authHeader)
     const token = authHeader && authHeader.split(' ')[1]
     if (!token) console.error('invalid token')
     if (!token) return res.status(401).send('token invalid')
     jwt.verify(token, tokenSecret, (err, user) => {
         if (err && err.name === 'TokenExpiredError') {
-            console.error('token expired')
+            console.error('authenicateToken', 'token expired')
             return res.status(401).send('token expired')
         }
         if (err) return res.sendStatus(403)

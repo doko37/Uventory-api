@@ -34,6 +34,13 @@ module.exports = (sequelize, DataTypes) => {
                 model: 'Ingredients',
                 key: 'id'
             }
+        },
+        lastLogId: {
+            type: DataTypes.UUID,
+            references: {
+                model: 'IngredientLogGroups',
+                key: 'id'
+            }
         }
     })
 

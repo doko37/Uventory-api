@@ -8,7 +8,7 @@ module.exports = (sequelize, DataTypes) => {
         },
         code: {
             type: DataTypes.STRING(255),
-            unique: false
+            unique: true
         },
         name: {
             type: DataTypes.STRING(255),
@@ -44,7 +44,12 @@ module.exports = (sequelize, DataTypes) => {
             defaultValue: 0
         },
         ed: {
-            type: DataTypes.ENUM('Yes', 'No')
+            type: DataTypes.STRING(255),
+            allowNull: true,
+            references: {
+                model: 'Eds',
+                key: 'id'
+            }
         },
         reciever: {
             type: DataTypes.STRING(255)

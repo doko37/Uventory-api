@@ -54,9 +54,8 @@ const tokenMiddleware = (socket, next) => {
     }
     jwt.verify(token, tokenSecret, (err, user) => {
         if (err && err.name === 'TokenExpiredError') {
-            socket.emit('token_error', 'Token expired')
+            socket.emit('token_expired', 'Token expired')
             socket.disconnect()
-            //console.error('token expired')
             return next(new Error('Token expired'))
         }
         if (err) {
@@ -80,7 +79,7 @@ app.use('/api/suppliers', suppliers)
 app.use('/api/locations', locations)
 app.use('/api/notifications', notifications)
 
-db.sync({ alter: true }).then((req) => {
+db.authenticate().then((req) => {
     server.listen(5000, () => {
         console.log("Listening on port 5000")
     })
@@ -167,7 +166,6 @@ io.on("connection", (socket) => {
             },
             attributes: ['id', 'reservedIngredient']
         })
-        socket.leave('logIngredient')
         io.to('logIngredient').emit("reserve_updated", users)
     })
 })
@@ -175,8 +173,9 @@ io.on("connection", (socket) => {
 cron.schedule('0 0 * * *', checkExpiryDates)
 cron.schedule('0 0 * * *', deleteNotificationArchive)
 cron.schedule('0 0 * * *', deleteRefreshTokens)
-cron.schedule('* * * * *', () => {
-    io.sockets.sockets.forEach((socket) => {
-        checkToken(socket)
-    })
-})
+// cron.schedule('* * * * *', () => {
+//     io.sockets.sockets.forEach((socket) => {
+//         console.log(`Checking token for user: ${socket.user.firstName}`)
+//         checkToken(socket)
+//     })
+// })

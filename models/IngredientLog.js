@@ -6,45 +6,32 @@ module.exports = (sequelize, DataTypes) => {
             primaryKey: true,
             unique: true,
         },
-        ingredientId: {
-            type: DataTypes.INTEGER.UNSIGNED,
+        logGroup: {
+            type: DataTypes.UUID,
             references: {
-                model: 'Ingredients',
+                model: 'IngredientLogGroups',
                 key: 'id'
             }
         },
         batchNo: {
             type: DataTypes.STRING(255)
         },
-        location: {
-            type: DataTypes.INTEGER.UNSIGNED,
-            references: {
-                model: 'Locations',
-                key: 'id'
-            }
+        expDate: {
+            type: DataTypes.DATE
         },
-        user: {
-            type: DataTypes.INTEGER.UNSIGNED,
-            references: {
-                model: 'Users',
-                key: 'id'
-            }
-        },
-        inout: {
-            type: DataTypes.ENUM('in', 'out')
+        poDate: {
+            type: DataTypes.DATE
         },
         qty: {
             type: DataTypes.FLOAT
         },
-        inProduct: {
-            type: DataTypes.INTEGER.UNSIGNED,
-            references: {
-                model: 'Products',
-                key: 'id'
-            }
+        unit: {
+            type: DataTypes.ENUM('mg', 'g', 'kg', 'ml', 'l', 'ea'),
+            isNull: false,
         },
-        remark: {
-            type: DataTypes.TEXT
+        batchDeleted: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
         }
     })
 

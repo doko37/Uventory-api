@@ -5,6 +5,8 @@ const { authenticateTokenAndAdmin, authenticateTokenAndMember, authenticateToken
 const Product = db.models.Product
 const ProductBatch = db.models.ProductBatch
 const ProductLog = db.models.ProductLog
+const ProductTemplate = db.models.ProductTemplate
+const ProductTemplateIngredient = db.models.ProductTemplateIngredient
 const Brand = db.models.Brand
 const User = db.models.User
 const Location = db.models.Location
@@ -136,6 +138,56 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
     } catch (err) {
         console.error(err)
         res.status(500).send(err)
+    }
+})
+
+router.post('/templates', authenticateTokenAndMember, async (req, res) => {
+
+})
+
+router.get('/templates', authenticateToken, async (req, res) => {
+    try {
+        let whereCondition
+        if (req.query.query) {
+            whereCondition[Op.or] = [
+                { name: { [Op.like]: `%${req.query.query}%` } },
+                { '$Product.name$': { [Op.like]: `%${req.query.query}%` } }
+            ]
+        }
+        const templates = await ProductTemplate.findAll({
+            where: whereCondition,
+            include: [
+                {
+                    model: Product,
+                    required: false
+                }
+            ]
+        })
+        return res.status(200).send(templates)
+    } catch (err) {
+        console.error(err)
+        return res.sendStatus(500)
+    }
+})
+
+router.get('/templates/:id', authenticateToken, async (req, res) => {
+    try {
+        const template = await ProductTemplate.findOne({
+            where: {
+                id: req.params.id
+            },
+            include: [
+                {
+                    model: ProductTemplateIngredient,
+                    required: true
+                }
+            ]
+        })
+
+        return res.status(200).send(template)
+    } catch (err) {
+        console.error(err)
+        return res.sendStatus(500)
     }
 })
 
