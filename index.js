@@ -73,7 +73,7 @@ app.use((req, res, next) => {
     next()
 })
 app.use('/api/auth', auth)
-app.use('/api/ingredients', ingredients)
+app.use('/api/ingredients', ingredients.router)
 app.use('/api/products', products)
 app.use('/api/suppliers', suppliers)
 app.use('/api/locations', locations)

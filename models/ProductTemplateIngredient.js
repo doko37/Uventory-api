@@ -16,6 +16,10 @@ module.exports = (sequelize, DataTypes) => {
         },
         qty: {
             type: DataTypes.FLOAT
+        },
+        unit: {
+            type: DataTypes.ENUM('mg', 'g', 'kg', 'ml', 'l', 'ea'),
+            isNull: false,
         }
     })
 

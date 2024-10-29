@@ -1,25 +1,17 @@
 module.exports = (sequelize, DataTypes) => {
-    const IngredientLogGroup = sequelize.define('IngredientLogGroup', {
+    const ProductLogGroup = sequelize.define('ProductLogGroup', {
         id: {
             type: DataTypes.UUID,
             defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
             unique: true,
         },
-        ingredientId: {
-            type: DataTypes.INTEGER.UNSIGNED,
-            references: {
-                model: 'Ingredients',
-                key: 'id'
-            }
-        },
-        inProduct: {
+        productId: {
             type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Products',
                 key: 'id'
-            },
-            allowNull: true
+            }
         },
         user: {
             type: DataTypes.INTEGER.UNSIGNED,
@@ -51,25 +43,7 @@ module.exports = (sequelize, DataTypes) => {
         remark: {
             type: DataTypes.TEXT
         },
-        nextId: {
-            type: DataTypes.UUID,
-            references: {
-                model: 'IngredientLogGroups',
-                key: 'id'
-            }
-        }
-    }, {
-        indexes: [
-            {
-                unique: false,
-                fields: ['ingredientId']
-            },
-            {
-                unique: false,
-                fields: ['createdAt']
-            }
-        ]
     })
 
-    return IngredientLogGroup
+    return ProductLogGroup
 }

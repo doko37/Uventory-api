@@ -79,7 +79,7 @@ router.post('/login', async (req, res) => {
 
         const match = bcrypt.compareSync(req.body.password, user.password)
         if (match) {
-            const { password, ...rest } = user.dataValues
+            const { password, lastIngredientLogId, lastProductLogId, ...rest } = user.dataValues
             const token = generateToken(rest)
             const refreshToken = jwt.sign(rest, refreshSecret, { expiresIn: '1h' })
             await RefreshToken.create({ token: refreshToken })
@@ -158,7 +158,7 @@ router.post('/reset', authenticateTokenAndAdmin, async (req, res) => {
             'Other-animal',
             'Oil-Liquid',
             'UB-Products',
-            'Caps',
+            'Bottle-Cap',
             'Labels',
             'Boxes',
             'Capsules',

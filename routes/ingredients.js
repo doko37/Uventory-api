@@ -1,5 +1,5 @@
 const router = require('express').Router()
-const { Op, Sequelize, where } = require('sequelize')
+const { Op, Sequelize, where, Transaction } = require('sequelize')
 const db = require('../db')
 const sequelize = require('../db')
 const Ingredient = db.models.Ingredient
@@ -31,7 +31,7 @@ const convertToBase = (fromUnit, amount) => {
 }
 
 const convertToUnit = (toUnit, amount) => {
-    if (fromUnit === 'ea') return amount
+    if (toUnit === 'ea') return amount
     const fromUnit = toUnit.includes('g') ? 'mg' : 'ml'
     const multiplier = Math.pow(1000, (unitMap.get(fromUnit) - unitMap.get(toUnit)))
     return amount * multiplier
@@ -39,6 +39,16 @@ const convertToUnit = (toUnit, amount) => {
 
 router.post('/', authenticateTokenAndAdmin, async (req, res) => {
     const stockAlert = convertToBase(req.body.unit, req.body.stockAlert)
+    const ingredient = await Ingredient.findOne({
+        where: {
+            name: req.body.name
+        }
+    })
+
+    if (ingredient) {
+        return res.status(400).send(`Name \"${req.body.name}\" already exists.`)
+    }
+
     Ingredient.create({
         code: req.body.code,
         name: req.body.name,
@@ -55,7 +65,7 @@ router.post('/', authenticateTokenAndAdmin, async (req, res) => {
         })
         .catch(err => {
             console.error(err)
-            res.status(500).send(err)
+            res.status(400).send(err)
         })
 })
 
@@ -93,6 +103,7 @@ router.post('/category', authenticateTokenAndAdmin, async (req, res) => {
 
 router.post('/log', authenticateTokenAndMember, async (req, res) => {
     const inOut = req.body.inOut
+    const transaction = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED })
     try {
         const qty = convertToBase(req.body.unit, req.body.qty)
         const ingredient = await Ingredient.findOne({
@@ -102,7 +113,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
         })
 
         const logGroup = await IngredientLogGroup.create({
-            ingredientId: ingredient.id,
+            ingredientId: ingredient.dataValues.id,
             inProduct: req.body.inProduct || null,
             user: req.user.id,
             inout: inOut,
@@ -111,14 +122,33 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
             remark: req.body.remark || null,
             location: req.body.location.id || null,
             ed: req.body.ed
-        }).catch(err => console.error(err))
+        }, { transaction }).catch(err => console.error(err))
+
+        const prevLog = await IngredientLogGroup.findOne({
+            where: {
+                ingredientId: ingredient.dataValues.id
+            },
+            order: [['createdAt', 'DESC']]
+        })
+
+        if (prevLog) {
+            await IngredientLogGroup.update({
+                nextId: logGroup.dataValues.id
+            }, {
+                where: {
+                    id: prevLog.dataValues.id
+                },
+                transaction
+            })
+        }
 
         await User.update({
-            lastLogId: logGroup.dataValues.id
+            lastIngredientLogId: logGroup.dataValues.id
         }, {
             where: {
                 id: req.user.id
-            }
+            },
+            transaction
         })
 
         if (inOut === 'in') {
@@ -129,7 +159,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 expDate: req.body.expDate,
                 poDate: req.body.poDate,
                 unit: ingredient.unit
-            }).catch(err => console.error(err))
+            }, { transaction })
 
             await IngredientBatch.create({
                 batchNo: req.body.batchNo,
@@ -138,7 +168,7 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 poDate: req.body.poDate,
                 qty: qty,
                 location: req.body.location.id
-            }).catch(err => console.error(err))
+            }, { transaction })
 
             let payload = {
                 qty: ingredient.qty + qty
@@ -150,10 +180,10 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
             await Ingredient.update(payload, {
                 where: {
                     id: req.body.ingredientId
-                }
-            }).catch(err => console.error(err))
-
-
+                },
+                transaction
+            })
+            await transaction.commit()
             res.status(200).send(log)
         } else {
             if (qty > ingredient.qty) {
@@ -163,12 +193,14 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
 
             req.body.batchList.forEach(async currBatch => {
                 const currQty = convertToBase(req.body.unit, currBatch.qty)
+
                 await IngredientBatch.update({
                     qty: Sequelize.literal(`qty - ${currQty}`)
                 }, {
                     where: {
                         id: currBatch.id,
-                    }
+                    },
+                    transaction
                 })
 
                 const batch = await IngredientBatch.findOne({
@@ -185,19 +217,20 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                         where: {
                             id: currBatch.id
                         }
-                    })
+                    }, { transaction })
                     batchDeleted = true
                 }
 
-                IngredientLog.create({
+                await IngredientLog.create({
                     logGroup: logGroup.id,
                     batchNo: batchNo,
                     qty: currQty,
+                    batchQty: batch.dataValues.qty,
                     expDate: req.body.expDate,
                     poDate: req.body.poDate,
                     unit: ingredient.unit,
                     batchDeleted: batchDeleted
-                })
+                }, { transaction })
             })
 
             await Ingredient.update({
@@ -205,22 +238,25 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
             }, {
                 where: {
                     id: req.body.ingredientId
-                }
+                },
+                transaction
             })
 
             if (ingredient.qty - qty < ingredient.stockAlert && !ingredient.alertDismissed) {
                 const dp = ingredient.unit === 'ea' ? 0 : 3
                 const msg = `${ingredient.name} qty is low! (${convertToUnit(ingredient.unit, ingredient.qty - qty).toFixed(dp)}${ingredient.unit}/${convertToUnit(ingredient.unit, ingredient.stockAlert).toFixed(dp)}${ingredient.unit})`
-                Notification.create({
+                await Notification.create({
                     ingredientId: ingredient.id,
                     type: 'lowStock',
                     msg: msg
-                })
+                }, { transaction })
             }
+            await transaction.commit()
             res.status(200).send("Load out successful")
         }
         req.io.emit('log_ingredient', { id: req.user.id })
     } catch (err) {
+        await transaction.rollback()
         console.error(err)
         res.status(500).send(err)
     }
@@ -355,7 +391,9 @@ router.get('/:id/logs', authenticateToken, async (req, res) => {
 
             whereCondition[Op.or] = [
                 { remark: { [Op.like]: `%${req.query.search}%` } },
-                { location: { [Op.like]: `%${req.query.search}%` } },
+                { '$User.firstName$': { [Op.like]: `%${req.query.search}%` } },
+                { '$User.lastName$': { [Op.like]: `%${req.query.search}%` } },
+                { '$Location.name$': { [Op.like]: `%${req.query.search}%` } },
                 { qty: { [Op.like]: `%${req.query.search}%` } },
                 { ed: { [Op.like]: `%${req.query.search}%` } },
                 { '$Ingredient.code$': { [Op.like]: `%${req.query.search}%` } },
@@ -385,6 +423,14 @@ router.get('/:id/logs', authenticateToken, async (req, res) => {
                 {
                     model: IngredientLog,
                     required: false,
+                },
+                {
+                    model: Location,
+                    required: false
+                },
+                {
+                    model: User,
+                    required: false
                 }
             ],
             order: [[sortBy, req.query.dir || 'ASC']]
@@ -403,17 +449,24 @@ router.get('/lastLog', authenticateTokenAndMember, async (req, res) => {
             id: req.user.id
         }
     })
-    if (user && user.lastLogId) {
+    if (user && user.lastIngredientLogId) {
         const log = await IngredientLogGroup.findOne({
             where: {
-                id: user.lastLogId
+                id: user.lastIngredientLogId
             }
+        })
+
+        const unit = await IngredientLog.findOne({
+            where: {
+                logGroup: log.dataValues.id
+            },
+            attributes: ['unit']
         })
 
         if (!log.dataValues) {
             return res.status(200).send('No log found')
         }
-        return res.status(200).send(log)
+        return res.status(200).send({ ...log.dataValues, ...unit.dataValues })
     }
 
     return res.status(401).send('No log found')
@@ -509,6 +562,18 @@ router.put('/:id', authenticateTokenAndMember, async (req, res) => {
     let editList
     if (req.body.stockAlert) {
         editList = { ...req.body, stockAlert: convertToBase(req.body.unit, req.body.stockAlert) }
+    } else if (req.body.name) {
+        const ingredient = await Ingredient.findOne({
+            where: {
+                name: req.body.name
+            }
+        })
+
+        if (ingredient) {
+            return res.status(400).send(`Name \"${req.body.name}\" already exists.`)
+        }
+
+        editList = req.body
     } else {
         editList = req.body
     }
@@ -557,66 +622,60 @@ router.put('/batch/:id', authenticateTokenAndAdmin, async (req, res) => {
 })
 
 router.put('/log/:id', authenticateTokenAndAdmin, async (req, res) => {
+    const transaction = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED })
     try {
-        const log = await IngredientLogGroup.findOne({
-            where: {
-                id: req.params.id
-            },
-            include: [
-                {
-                    model: IngredientLog,
-                    required: true
+
+        if (req.body.qty) {
+            let currLog = await IngredientLogGroup.findOne({
+                where: {
+                    id: req.params.id
                 }
-            ]
-        })
+            })
+            while (currLog) {
 
-        if (!log) return res.sendStatus(401)
-        const subLog = log.IngredientLogs[0].dataValues
-        const { qty, location, inProduct } = req.body.editList
-        if (log.inout === 'in') {
-            if (qty) {
-                await IngredientLogGroup.update({ qty: qty }, {
-                    where: {
-                        id: log.id
-                    }
-                })
-                await IngredientLog.update({ qty: qty }, {
-                    where: {
-                        id: subLog.id
-                    }
-                })
-                await IngredientBatch.update({ qty: qty }, {
-                    where: {
-                        ingredientId: log.ingredientId,
-                        batchNo: subLog.batchNo
-                    }
-                })
-
-                const diff = log.qty - qty
-                await Ingredient.update({ qty: Sequelize.literal(`qty - ${diff}`) }, {
-                    where: {
-                        id: log.ingredientId
-                    }
-                })
-            }
-
-            if (location) {
-                await IngredientBatch.update({ location: location }, {
-                    where: {
-                        ingredientId: log.ingredientId,
-                        batchNo: subLog.batchNo
-                    }
-                })
             }
         } else {
+            if (req.body.location) {
+                await IngredientLogGroup.update({ location: req.body.location }, {
+                    where: {
+                        id: req.params.id
+                    },
+                    transaction
+                })
+                await IngredientBatch.update({ location: req.body.location }, {
+                    where: {
+                        logId: req.params.id
+                    },
+                    transaction
+                })
+            }
 
+            if (req.body.ed) {
+                await IngredientLogGroup.update({ ed: req.body.ed }, {
+                    where: {
+                        id: req.params.id
+                    },
+                    transaction
+                })
+            }
+
+            if (req.body.product) {
+                await IngredientLogGroup.update({ inProduct: req.body.product }, {
+                    where: {
+                        id: req.params.id
+                    },
+                    transaction
+                })
+            }
         }
 
-        req.io.emit('log_ingredient', { id: req.user.id })
+        transaction.commit()
         return res.sendStatus(200)
     } catch (err) {
         console.error(err)
+        transaction.rollback()
+        return res.sendStatus(500)
     }
 })
 
-module.exports = router
+module.exports = { router, convertToBase, convertToUnit }

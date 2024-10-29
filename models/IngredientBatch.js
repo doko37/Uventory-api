@@ -13,6 +13,13 @@ module.exports = (sequelize, DataTypes) => {
                 key: 'id'
             }
         },
+        logId: {
+            type: DataTypes.UUID,
+            references: {
+                model: 'IngredientLogGroups',
+                key: 'id'
+            }
+        },
         batchNo: {
             type: DataTypes.STRING(255)
         },
