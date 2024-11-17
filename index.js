@@ -10,6 +10,7 @@ const locations = require('./routes/locations')
 const suppliers = require('./routes/suppliers')
 const notifications = require('./routes/notifications')
 const auth = require('./routes/auth')
+const audit = require('./routes/audit')
 const db = require('./db')
 const User = db.models.User
 const cors = require('cors')
@@ -78,6 +79,7 @@ app.use('/api/products', products)
 app.use('/api/suppliers', suppliers)
 app.use('/api/locations', locations)
 app.use('/api/notifications', notifications)
+app.use('/api/audits', audit)
 
 db.authenticate().then((req) => {
     server.listen(5000, () => {

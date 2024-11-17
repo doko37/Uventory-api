@@ -1,6 +1,7 @@
 const router = require('express').Router()
 const { Op, Sequelize } = require('sequelize')
 const db = require('../db')
+const sequelize = require('../db')
 const { authenticateTokenAndAdmin, authenticateTokenAndMember, authenticateToken } = require('./authToken')
 const { convertToBase } = require('./ingredients')
 const Product = db.models.Product
@@ -13,6 +14,7 @@ const Brand = db.models.Brand
 const User = db.models.User
 const Location = db.models.Location
 const Ingredient = db.models.Ingredient
+const IngredientBatch = db.models.IngredientBatch
 
 router.post('/', authenticateTokenAndAdmin, async (req, res) => {
     Product.create({
@@ -203,16 +205,39 @@ router.get('/templates/:id', authenticateToken, async (req, res) => {
                 {
                     model: ProductTemplateIngredient,
                     required: true,
-                    include: [
-                        {
-                            model: Ingredient,
-                            required: true,
-                            attributes: ['name', 'qty', 'unit']
-                        }
-                    ]
                 }
-            ]
+            ],
         })
+
+        if(!template) {
+            return res.sendStatus(404)
+        }
+
+        const ingredients = []
+
+        for(const pti of template.dataValues.ProductTemplateIngredients.map(i => i.dataValues)) {
+            const ingredient = await Ingredient.findOne({
+                where: {
+                    id: pti.ingredientId
+                },
+                attributes: [
+                    'id',
+                    'name',
+                    'unit',
+                    [sequelize.fn('SUM', sequelize.col('IngredientBatches.qty')), 'qtySum']
+                ],
+                include: [
+                    {
+                        model: IngredientBatch,
+                        required: false,
+                        attributes: []
+                    }
+                ],
+            })
+            const index = template.dataValues.ProductTemplateIngredients.findIndex(i => i.ingredientId === ingredient.dataValues.id)
+            template.dataValues.ProductTemplateIngredients[index].dataValues['Ingredient'] = ingredient.dataValues
+
+        }
 
         return res.status(200).send(template)
     } catch (err) {

@@ -125,49 +125,49 @@ router.post('/create', async (req, res) => {
 router.post('/reset', authenticateTokenAndAdmin, async (req, res) => {
     try {
         const locations = [
-            'Bottle storage',
-            'Shed',
-            'Propolis',
-            'Bottle shed',
             'Alcohol Storage',
-            'Ingredients container',
+            'Black container',
+            'Blue container',
+            'Bottle shed',
+            'Bottle storage', 
+            'Cissus container',
+            'Display room',
             'Evergreen container',
             'Evergreen storage (outside)',
-            'Blue container',
-            'Black container',
-            'Metaformula container',
-            'Yellow container',
-            'NZ World container',
-            'Cissus container',
-            'Spare container',
-            'Machine container',
             'Factory 1-Dry room 2',
             'Factory 1-Dry room 4',
             'Factory 1-Dry room 5',
+            'Ingredients container',
+            'Machine container',
+            'Metaformula container',
+            'NZ World container',
             'Product storage',
-            'Display room'
-        ];
+            'Propolis',
+            'Shed',
+            'Spare container',
+            'Yellow container'
+        ]
 
         locations.forEach(async (location) => {
             await Location.create({ name: location });
         });
 
         const ingredientCategories = [
-            'Dairy',
             'Bee',
-            'Other-animal',
-            'Oil-Liquid',
-            'UB-Products',
             'Bottle-Cap',
-            'Labels',
             'Boxes',
             'Capsules',
-            'Tablets',
+            'Dairy',
             'Evergreen',
+            'Labels',
             'Nu-Wise',
-            'Other'
-        ];
-
+            'Oil-Liquid',
+            'Other',
+            'Other-animal',
+            'Tablets',
+            'UB-Products'
+        ]
+        
         ingredientCategories.forEach(async (category) => {
             await IngredientCategory.create({ name: category });
         });
@@ -204,7 +204,7 @@ router.post('/reset', authenticateTokenAndAdmin, async (req, res) => {
             {
                 code: 'GP',
                 name: 'Gelatin Powder',
-                category: 'Other-animal',
+                category: 11,
                 supplier: 2,
                 stockAlert: 500000,
                 unit: 'g',
@@ -213,7 +213,7 @@ router.post('/reset', authenticateTokenAndAdmin, async (req, res) => {
             {
                 code: 'IMP',
                 name: 'Soyabean Oil',
-                category: 'Oil-Liquid',
+                category: 9,
                 supplier: 1,
                 stockAlert: 300000,
                 unit: 'l',
@@ -222,7 +222,7 @@ router.post('/reset', authenticateTokenAndAdmin, async (req, res) => {
             {
                 code: 'BW',
                 name: 'Beeswax',
-                category: 'Bee',
+                category: 1,
                 supplier: 3,
                 stockAlert: 700000,
                 unit: 'g',
@@ -254,6 +254,21 @@ router.get('/users', authenticateTokenAndAdmin, async (req, res) => {
 router.get('/user/:id', authenticateToken, async (req, res) => {
     if (req.user.id != req.params.id) return res.sendStatus(403)
     else return res.status(200).send(req.user)
+})
+
+router.put('/user/:id', authenticateTokenAndAdmin, async (req, res) => {
+    try {
+        await User.update(req.body, {
+            where: {
+                id: req.params.id
+            }
+        })
+
+        return res.sendStatus(200)
+    } catch (err) {
+        console.error(err)
+        return res.sendStatus(500)
+    }
 })
 
 module.exports = router

@@ -34,10 +34,29 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.ENUM('mg', 'g', 'kg', 'ml', 'l', 'ea'),
             isNull: false,
         },
+        location: {
+            type: DataTypes.INTEGER.UNSIGNED,
+            references: {
+                model: 'Locations',
+                key: 'id'
+            }
+        },
         batchDeleted: {
             type: DataTypes.BOOLEAN,
             defaultValue: false
+        },
+        flagged: {
+            type: DataTypes.BOOLEAN,
+            default: false
         }
+    }, {
+        paranoid: true,
+        indexes: [
+            {
+                unique: false,
+                fields: ['createdAt']
+            }
+        ]
     })
 
     return IngredientLog

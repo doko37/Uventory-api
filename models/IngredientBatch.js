@@ -15,13 +15,13 @@ module.exports = (sequelize, DataTypes) => {
         },
         logId: {
             type: DataTypes.UUID,
-            references: {
-                model: 'IngredientLogGroups',
+            refernces: {
+                model: 'IngredientLog',
                 key: 'id'
             }
         },
         batchNo: {
-            type: DataTypes.STRING(255)
+            type: DataTypes.STRING(255),
         },
         expDate: {
             type: DataTypes.DATE
@@ -40,6 +40,10 @@ module.exports = (sequelize, DataTypes) => {
             }
         },
         alertDismissed: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
+        },
+        flagged: {
             type: DataTypes.BOOLEAN,
             defaultValue: false
         }

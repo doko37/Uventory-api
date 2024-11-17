@@ -12,6 +12,7 @@ const Product = db.models.Product
 const User = db.models.User
 const Notification = db.models.Notification
 const Ed = db.models.Ed
+const LogAudit = db.models.LogAudit
 const { authenticateTokenAndAdmin } = require('./authToken')
 const { authenticateTokenAndMember } = require('./authToken')
 const { authenticateToken } = require('./authToken')
@@ -24,6 +25,7 @@ unitMap.set('ml', 3)
 unitMap.set('l', 4)
 
 const convertToBase = (fromUnit, amount) => {
+    console.log(fromUnit, amount)
     if (fromUnit === 'ea') return amount
     const toUnit = fromUnit.includes('g') ? 'mg' : 'ml'
     const multiplier = Math.pow(1000, (unitMap.get(fromUnit) - unitMap.get(toUnit)))
@@ -101,6 +103,32 @@ router.post('/category', authenticateTokenAndAdmin, async (req, res) => {
         .catch(err => res.status(500).send(err))
 })
 
+const createAudit = async (req, action, transaction) => {
+    console.log("createAudit:", req)
+    try {
+        const newItem = {
+            logAction: action,
+            ingredientLogId: req.ingredientLogId,
+            ingredientId: req.ingredientId,
+            batchNo: req.batchNo,
+            qty: req.qty || null,
+            user: req.user,
+            inOut: req.inOut
+        }
+
+        if (action === 'update') {
+            newItem.prevQty = req.prevQty
+        }
+
+        await LogAudit.create(newItem, {
+            transaction
+        })
+        return
+    } catch(err) {
+        throw err
+    }
+}
+
 router.post('/log', authenticateTokenAndMember, async (req, res) => {
     const inOut = req.body.inOut
     const transaction = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED })
@@ -109,7 +137,8 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
         const ingredient = await Ingredient.findOne({
             where: {
                 id: req.body.ingredientId
-            }
+            },
+            transaction
         })
 
         const logGroup = await IngredientLogGroup.create({
@@ -117,30 +146,10 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
             inProduct: req.body.inProduct || null,
             user: req.user.id,
             inout: inOut,
-            qty: qty,
             unit: req.body.unit,
             remark: req.body.remark || null,
-            location: req.body.location.id || null,
             ed: req.body.ed
-        }, { transaction }).catch(err => console.error(err))
-
-        const prevLog = await IngredientLogGroup.findOne({
-            where: {
-                ingredientId: ingredient.dataValues.id
-            },
-            order: [['createdAt', 'DESC']]
-        })
-
-        if (prevLog) {
-            await IngredientLogGroup.update({
-                nextId: logGroup.dataValues.id
-            }, {
-                where: {
-                    id: prevLog.dataValues.id
-                },
-                transaction
-            })
-        }
+        }, { transaction })
 
         await User.update({
             lastIngredientLogId: logGroup.dataValues.id
@@ -158,16 +167,20 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 qty: qty,
                 expDate: req.body.expDate,
                 poDate: req.body.poDate,
+                location: req.body.location.id,
                 unit: ingredient.unit
             }, { transaction })
+
+            await createAudit({ ...req.body, qty: qty, ingredientLogId: log.dataValues.id, user: req.user.id, ingredientId: ingredient.dataValues.id }, 'create', transaction)
 
             await IngredientBatch.create({
                 batchNo: req.body.batchNo,
                 ingredientId: ingredient.id,
+                logId: log.dataValues.id,
                 expDate: req.body.expDate,
                 poDate: req.body.poDate,
                 qty: qty,
-                location: req.body.location.id
+                location: req.body.location.id,
             }, { transaction })
 
             let payload = {
@@ -183,55 +196,65 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                 },
                 transaction
             })
-            await transaction.commit()
-            res.status(200).send(log)
         } else {
-            if (qty > ingredient.qty) {
-                res.status(401).send("Invalid qty")
-                return
-            }
+            // if (qty > ingredient.qty) {
+            //     res.status(401).send("Invalid qty")
+            //     await transaction.rollback()
+            //     return
+            // }
 
-            req.body.batchList.forEach(async currBatch => {
+            for(const index in req.body.batchList) {
+                const currBatch = req.body.batchList[index]
                 const currQty = convertToBase(req.body.unit, currBatch.qty)
-
-                await IngredientBatch.update({
-                    qty: Sequelize.literal(`qty - ${currQty}`)
-                }, {
-                    where: {
-                        id: currBatch.id,
-                    },
-                    transaction
-                })
-
                 const batch = await IngredientBatch.findOne({
                     where: {
                         id: currBatch.id
                     },
-                    attributes: ['batchNo', 'qty']
+                    transaction,
+                    attributes: ['batchNo', 'qty', 'location']
                 })
 
                 const batchNo = batch.dataValues.batchNo
-                let batchDeleted = false
-                if (batch.dataValues.qty <= 0) {
+                let deleted = false
+                if (batch.dataValues.qty - currQty === 0) {
                     await IngredientBatch.destroy({
                         where: {
                             id: currBatch.id
                         }
                     }, { transaction })
-                    batchDeleted = true
+                    deleted = true
+                } else {
+                    await IngredientBatch.update({
+                        qty: Sequelize.literal(`qty - ${currQty}`)
+                    }, {
+                        where: {
+                            id: currBatch.id,
+                        },
+                        transaction,
+                    })
                 }
-
-                await IngredientLog.create({
+                const log = await IngredientLog.create({
                     logGroup: logGroup.id,
                     batchNo: batchNo,
                     qty: currQty,
                     batchQty: batch.dataValues.qty,
                     expDate: req.body.expDate,
                     poDate: req.body.poDate,
+                    location: batch.dataValues.location,
                     unit: ingredient.unit,
-                    batchDeleted: batchDeleted
+                    batchDeleted: deleted
                 }, { transaction })
-            })
+
+                await createAudit({ 
+                    ...req.body, 
+                    qty: currQty,
+                    ingredientLogId: log.id,
+                    prevQty: batch.dataValues.qty,
+                    batchNo: batchNo, 
+                    user: req.user.id,
+                    ingredientId: ingredient.dataValues.id 
+                }, 'create', transaction)
+            }
 
             await Ingredient.update({
                 qty: ingredient.qty - qty
@@ -251,9 +274,9 @@ router.post('/log', authenticateTokenAndMember, async (req, res) => {
                     msg: msg
                 }, { transaction })
             }
-            await transaction.commit()
-            res.status(200).send("Load out successful")
         }
+        await transaction.commit()
+        res.sendStatus(200)
         req.io.emit('log_ingredient', { id: req.user.id })
     } catch (err) {
         await transaction.rollback()
@@ -283,7 +306,11 @@ router.get('/category/:category', authenticateToken, async (req, res) => {
         if (req.query.sortBy === 'Stock Alert') {
             sortBy = sequelize.literal('qty - stockAlert')
         } else {
-            sortBy = req.query.sortBy.toLowerCase()
+            if(req.query.sortBy) {
+                sortBy = req.query.sortBy.toLowerCase()
+            } else {
+                sortBy = 'createdAt'
+            }
         }
 
         let whereCondition = {}
@@ -292,7 +319,7 @@ router.get('/category/:category', authenticateToken, async (req, res) => {
             whereCondition[Op.or] = [
                 { name: { [Op.like]: `%${req.query.search}%` } },
                 { supplier: { [Op.like]: `%${req.query.search}%` } },
-                { qty: { [Op.like]: `%${req.query.search}%` } },
+                { code: { [Op.like]: `%${req.query.search}%` } },
                 { '$IngredientBatches.batchNo$': { [Op.like]: `%${req.query.search}%` } }
             ];
         } else if (req.params.category !== 'All') {
@@ -300,17 +327,22 @@ router.get('/category/:category', authenticateToken, async (req, res) => {
         }
 
         ingredients = await Ingredient.findAll({
-            include: req.query.sortBy === 'Exp. Date' || req.query.search ? [{
-                model: IngredientBatch,
-                attributes: [],
-                required: false
-            }] : [],
+            attributes: {
+                include: [[sequelize.fn('COALESCE', sequelize.fn('SUM', sequelize.col('IngredientBatches.qty')), 0), 'qtySum']]
+            },
+            include: [
+                {
+                    model: IngredientBatch,
+                    required: false,
+                    attributes: []
+                }
+            ],
             where: whereCondition,
             group: ['Ingredient.id'],
             order: [
                 [req.query.sortBy === 'Exp. Date' ?
                     Sequelize.fn('MIN', Sequelize.col('IngredientBatches.expDate')) :
-                    sortBy, req.query.dir]
+                    sortBy, req.query.dir || 'ASC']
             ]
         })
         res.status(200).send(ingredients)
@@ -321,7 +353,9 @@ router.get('/category/:category', authenticateToken, async (req, res) => {
 })
 
 router.get('/categories', authenticateToken, async (req, res) => {
-    IngredientCategory.findAll()
+    IngredientCategory.findAll({
+        attributes: ['id', 'name']
+    })
         .then(data => res.status(200).send(data))
         .catch(err => res.status(500).send(err))
 })
@@ -359,6 +393,7 @@ router.get('/batch/:id', authenticateToken, async (req, res) => {
 
 router.get('/:id/logs', authenticateToken, async (req, res) => {
     try {
+        console.log(req.params.id)
         let sortBy
         if (!req.query.sortBy) {
             sortBy = 'createdAt'
@@ -370,73 +405,101 @@ router.get('/:id/logs', authenticateToken, async (req, res) => {
             sortBy = req.query.sortBy.toLowerCase()
         }
 
-        let whereCondition = {}
-        let groupIds = []
+        const { Op, Sequelize } = require('sequelize');
 
-        if (req.params.id !== 'all') {
-            whereCondition.ingredientId = req.params.id
-        }
+    let whereCondition = {};
+    let groupIds = [];
 
-        if (req.query.inOut) {
-            whereCondition.inout = req.query.inOut;
-        }
+    if (req.params.id !== 'all') {
+        whereCondition.ingredientId = req.params.id;
+    }
 
-        if (req.query.search) {
-            const ids = await IngredientLog.findAll({
-                attributes: ['logGroup'],
-                where: { batchNo: { [Op.like]: `%${req.query.search}%` } }
-            })
+    if (req.query.inOut) {
+        whereCondition.inout = req.query.inOut;
+    }
 
-            groupIds = ids.map(log => log.dataValues.logGroup)
+    if (req.query.search) {
+        const ids = await IngredientLog.findAll({
+            attributes: ['logGroup'],
+            where: { batchNo: { [Op.like]: `%${req.query.search}%` } }
+        });
 
-            whereCondition[Op.or] = [
-                { remark: { [Op.like]: `%${req.query.search}%` } },
-                { '$User.firstName$': { [Op.like]: `%${req.query.search}%` } },
-                { '$User.lastName$': { [Op.like]: `%${req.query.search}%` } },
-                { '$Location.name$': { [Op.like]: `%${req.query.search}%` } },
-                { qty: { [Op.like]: `%${req.query.search}%` } },
-                { ed: { [Op.like]: `%${req.query.search}%` } },
-                { '$Ingredient.code$': { [Op.like]: `%${req.query.search}%` } },
-                { id: { [Op.in]: groupIds } }
-            ];
-        }
+        groupIds = ids.map(log => log.dataValues.logGroup);
 
-        if (req.query.startDate && req.query.endDate) {
-            const startDate = new Date(req.query.startDate)
-            startDate.setHours(0, 0, 0, 0)
+        whereCondition[Op.or] = [
+            { remark: { [Op.like]: `%${req.query.search}%` } },
+            { '$User.firstName$': { [Op.like]: `%${req.query.search}%` } },
+            { '$User.lastName$': { [Op.like]: `%${req.query.search}%` } },
+            { ed: { [Op.like]: `%${req.query.search}%` } },
+            { '$Ingredient.code$': { [Op.like]: `%${req.query.search}%` } },
+            { id: { [Op.in]: groupIds } },
+            { '$IngredientLogs.Location.name$': { [Op.like]: `%${req.query.search}%` } }
+        ];
+    }
 
-            const endDate = new Date(req.query.endDate);
-            endDate.setHours(23, 59, 59, 999)
+    if (req.query.startDate && req.query.endDate) {
+        const startDate = new Date(req.query.startDate);
+        startDate.setHours(0, 0, 0, 0);
 
-            whereCondition['createdAt'] = {
-                [Op.between]: [startDate, endDate]
-            }
-        }
+        const endDate = new Date(req.query.endDate);
+        endDate.setHours(23, 59, 59, 999);
+
+        whereCondition['createdAt'] = {
+            [Op.between]: [startDate, endDate]
+        };
+    }
 
         logs = await IngredientLogGroup.findAll({
             where: whereCondition,
+            attributes: {
+                include: [
+                    [Sequelize.literal(`(SELECT SUM(qty) FROM IngredientLogs WHERE IngredientLogs.logGroup = IngredientLogGroup.id)`), 'qty'],
+                    [Sequelize.col('Ingredient.code'), 'ingredientCode'],
+                    [Sequelize.col('Ingredient.unit'), 'unit'],
+                    [Sequelize.col('Ingredient.id'), 'ingredientId']
+                ]
+            },
             include: [
                 {
                     model: Ingredient,
-                    required: true
+                    required: true,
+                    attributes: []
                 },
                 {
                     model: IngredientLog,
                     required: false,
-                },
-                {
-                    model: Location,
-                    required: false
+                    attributes: ['id', 'batchNo', 'qty', 'expDate', 'batchDeleted', 'flagged'],
+                    include: [
+                        {
+                            model: Location,
+                            attributes: []
+                        }
+                    ]
                 },
                 {
                     model: User,
-                    required: false
+                    required: false,
+                    attributes: []
                 }
             ],
+            group: [
+                'IngredientLogGroup.id',
+                'Ingredient.id',
+                'IngredientLogs.id',
+                'User.id'
+            ],
             order: [[sortBy, req.query.dir || 'ASC']]
+        });
+
+        const flattenLogs = logs.map(i => {
+            const list = i.IngredientLogs.map(i => i.dataValues)
+            return {
+                ...i.dataValues,
+                IngredientLogs: list
+            }
         })
 
-        res.status(200).send(logs)
+        res.status(200).send(flattenLogs)
     } catch (err) {
         console.error(err)
         res.status(500).send(err)
@@ -444,37 +507,58 @@ router.get('/:id/logs', authenticateToken, async (req, res) => {
 })
 
 router.get('/lastLog', authenticateTokenAndMember, async (req, res) => {
-    const user = await User.findOne({
-        where: {
-            id: req.user.id
-        }
-    })
-    if (user && user.lastIngredientLogId) {
-        const log = await IngredientLogGroup.findOne({
+    try {
+        const user = await User.findOne({
             where: {
-                id: user.lastIngredientLogId
+                id: req.user.id
             }
         })
-
-        const unit = await IngredientLog.findOne({
-            where: {
-                logGroup: log.dataValues.id
-            },
-            attributes: ['unit']
-        })
-
-        if (!log.dataValues) {
-            return res.status(200).send('No log found')
+        if (user && user.lastIngredientLogId) {
+            const logGroup = await IngredientLogGroup.findOne({
+                where: {
+                    id: user.lastIngredientLogId
+                }
+            })
+    
+            const log = await IngredientLog.findOne({
+                where: {
+                    logGroup: logGroup.dataValues.id
+                },
+                attributes: ['unit'],
+                include: [
+                    {
+                        model: Location,
+                        required: false,
+                        attributes: ['id']
+                    }
+                ]
+            })
+    
+            if (!log.dataValues) {
+                return res.status(200).send('No log found')
+            }
+    
+            return res.status(200).send({ ...logGroup.dataValues, unit: log.dataValues.unit, location: logGroup.inout === 'in' ? log.dataValues.Location.id : null })
         }
-        return res.status(200).send({ ...log.dataValues, ...unit.dataValues })
+    
+        return res.status(404).send('No log found')
+    } catch(err) {
+        console.error(err)
+        return res.sendStatus(500)
     }
-
-    return res.status(401).send('No log found')
 })
 
 router.get('/log/:id', authenticateToken, async (req, res) => {
     try {
         const log = await IngredientLogGroup.findOne({
+            where: {
+                id: req.params.id
+            },
+            attributes: {
+                include: [
+                    [Sequelize.literal(`(SELECT SUM(qty) FROM IngredientLogs WHERE IngredientLogs.logGroup = IngredientLogGroup.id)`), 'qty']
+                ]
+            },
             include: [
                 {
                     model: Ingredient,
@@ -491,13 +575,31 @@ router.get('/log/:id', authenticateToken, async (req, res) => {
                 },
                 {
                     model: IngredientLog,
-                    required: true
+                    required: false,
+                    include: [
+                        {
+                            model: Location,
+                            attributes: []
+                        }
+                    ],
+                    attributes: [
+                        'id', 
+                        [Sequelize.literal(`(SELECT name FROM Locations WHERE Locations.id = IngredientLogs.location)`), 'locationName'],
+                        [Sequelize.literal(`(SELECT id FROM Locations WHERE Locations.id = IngredientLogs.location)`), 'locationId'],
+                        'batchNo',
+                        'expDate',
+                        'qty',
+                        'batchQty',
+                        'batchDeleted',
+                        'flagged' 
+                    ] 
                 }
             ],
-            where: {
-                id: req.params.id
-            }
         })
+
+        if(!log) {
+            return res.sendStatus(404)
+        }
 
         res.status(200).send({ ...log.dataValues })
     } catch (err) {
@@ -526,10 +628,37 @@ router.get('/:id', authenticateToken, async (req, res) => {
     Ingredient.findOne({
         where: {
             id: req.params.id
-        }
+        },
+        attributes: {
+            include: [[sequelize.fn('SUM', sequelize.col('IngredientBatches.qty')), 'qtySum']]
+        },
+        include: [
+            {
+                model: IngredientBatch,
+                required: false,
+                attributes: []
+            }
+        ],
     })
         .then(data => res.status(200).send(data.toJSON()))
         .catch(err => res.status(500).send(err))
+})
+
+router.put('/category/:id', authenticateTokenAndAdmin, async (req, res) => {
+    try {
+        await IngredientCategory.update({
+            name: req.body.name
+        }, {
+            where: {
+                id: req.params.id
+            }
+        })
+
+        return res.sendStatus(200)
+    } catch(err) {
+        console.error(err)
+        return res.sendStatus(500)
+    }
 })
 
 router.put('/reserve/:id', authenticateTokenAndMember, async (req, res) => {
@@ -600,20 +729,46 @@ router.put('/batch/:id', authenticateTokenAndAdmin, async (req, res) => {
             }
         })
 
-        await IngredientBatch.update(req.body, {
-            where: {
-                id: req.params.id
+        if(req.body.batchNo) {
+            console.log(batch.dataValues.batchNo)
+            const logs = await IngredientLog.findAll({
+                where: {
+                    batchNo: batch.batchNo
+                },
+                include: [
+                    {
+                        model: IngredientLogGroup,
+                        where: {
+                            ingredientId: batch.dataValues.ingredientId
+                        },
+                        attributes: [],
+                        required: true
+                    }
+                ],
+                attributes: ['id']
+            })
+            for(const id of logs.map(i => i.dataValues.id)) {
+                await IngredientLog.update({
+                    batchNo: req.body.batchNo
+                }, {
+                    where: {
+                        id: id
+                    },
+                })
             }
-        })
-
-        if (req.body.qty) {
-            const diff = req.body.qty - batch.qty
-            await Ingredient.update(
-                { qty: Sequelize.literal(`qty + ${diff}`) },
-                { where: { id: batch.ingredientId } }
-            )
+            await IngredientBatch.update({ batchNo: req.body.batchNo }, {
+                where: {
+                    id: req.params.id
+                }
+            })
+        } else if (req.body.qty) {
+        } else {
+            await IngredientBatch.update(req.body, {
+                where: {
+                    id: req.params.id
+                }
+            })
         }
-
         res.status(200).send(`Updated ingredient batch (ID: ${req.params.id})`)
     } catch (err) {
         console.error(err)
@@ -621,59 +776,432 @@ router.put('/batch/:id', authenticateTokenAndAdmin, async (req, res) => {
     }
 })
 
-router.put('/log/:id', authenticateTokenAndAdmin, async (req, res) => {
+const updateQty = async (req) => {
     const transaction = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED })
     try {
+        for (const key of Object.keys(req.body.IngredientLogs)) {
+            const batch = req.body.IngredientLogs[key]
+            let first = true
+            const rootLog = batch.logs[0]
 
-        if (req.body.qty) {
-            let currLog = await IngredientLogGroup.findOne({
-                where: {
-                    id: req.params.id
-                }
-            })
-            while (currLog) {
-
+            if(rootLog.exclude) {
+                await createAudit({
+                    ingredientId: batch.ingredientId,
+                    ingredientLogId: rootLog.id,
+                    batchNo: key,
+                    inOut: rootLog.inOut,
+                    qty: rootLog.prevQty,
+                    user: req.user.id
+                }, 'delete', transaction)
+            } else {
+                await createAudit({
+                    ingredientId: batch.ingredientId,
+                    ingredientLogId: rootLog.id,
+                    batchNo: key,
+                    inOut: rootLog.inOut,
+                    qty: rootLog.qty,
+                    prevQty: rootLog.prevQty,
+                    user: req.user.id
+                }, 'update', transaction)
             }
-        } else {
-            if (req.body.location) {
-                await IngredientLogGroup.update({ location: req.body.location }, {
-                    where: {
-                        id: req.params.id
-                    },
-                    transaction
-                })
+
+            for(const log of batch.logs) {
+                if(first) {
+                    if(batch.deleted) {
+                        await IngredientBatch.destroy({
+                            where: {
+                                ingredientId: batch.ingredientId,
+                                batchNo: key
+                            },
+                            transaction
+                        })
+                    } else {
+                        const existingBatch = await IngredientBatch.findOne({
+                            where: {
+                                ingredientId: batch.ingredientId,
+                                batchNo: key
+                            },
+                            attributes: ['id'],
+                            transaction
+                        })
+
+                        const diff = log.qty - log.prevQty
+                        if(existingBatch) {
+                            await IngredientBatch.update({
+                                qty: log.inOut === 'out' ? sequelize.literal(`qty - ${diff}`) : sequelize.literal(`qty + ${diff}`),
+                                flagged: batch.flagged
+                            }, {
+                                where: {
+                                    ingredientId: batch.ingredientId,
+                                    batchNo: key
+                                },
+                                transaction
+                            })
+                        } else {
+                            const batchInfo = await IngredientLog.findOne({
+                                where: {
+                                    id: log.id
+                                },
+                                attributes: ['expDate', 'poDate', 'location'],
+                                transaction
+                            })
+                            if(batchInfo) {
+                                await IngredientBatch.create({
+                                    ingredientId: batch.ingredientId,
+                                    batchNo: key,
+                                    qty: log.inOut === 'out' ? log.prevQty - log.qty : log.qty - log.prevQty,
+                                    expDate: batchInfo.dataValues.expDate,
+                                    poDate: batchInfo.dataValues.poDate,
+                                    location: batchInfo.dataValues.location,
+                                    flagged: batch.flagged
+                                }, { transaction })
+                            }
+                        }
+                    }
+                    first = false
+                }
+
+                if(log.exclude) {
+                    await IngredientLog.destroy({
+                        where: {
+                            id: log.id
+                        },
+                        transaction
+                    })
+                } else {
+                    await IngredientLog.update({
+                        qty: log.qty,
+                        batchQty: log.batchQty,
+                        flagged: log.batchQty ? log.batchQty - log.qty < 0 ? true : false : false,
+                        batchDeleted: log.batchQty ? log.batchQty - log.qty === 0 ? true : false : false,
+                    }, {
+                        where: {
+                            id: log.id
+                        },
+                        transaction
+                    })
+                }
+            }
+        }
+        await transaction.commit()
+        return true
+    } catch(err) {
+        await transaction.rollback()
+        throw err
+    }
+}
+
+router.put('/log/:id', authenticateTokenAndAdmin, async (req, res) => {
+    const transaction = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED })
+    let logGroup = await IngredientLogGroup.findOne({
+        where: {
+            id: req.params.id
+        },
+        include: [
+            {
+                model: IngredientLog,
+                required: true
+            }
+        ],
+        transaction
+    })
+
+    if(!logGroup) return res.sendStatus(404)
+    try {
+        if (req.body.IngredientLogs) {
+            const batches = {}
+            if(!req.query.confirmed) {
+                for(const i in logGroup.dataValues.IngredientLogs) {
+                    const log = logGroup.dataValues.IngredientLogs[i]
+                    if(!req.body.IngredientLogs.some(i => i.id === log.id)) {
+                        continue
+                    }
+                    const logHistory = await IngredientLog.findAll({
+                        include: [
+                            {
+                                model: IngredientLogGroup,
+                                where: {
+                                    ingredientId: logGroup.dataValues.ingredientId
+                                },
+                                required: true,
+                                attributes: []
+                            }
+                        ],
+                        where: {
+                            batchNo: log.batchNo,
+                            createdAt: {
+                                [Op.gte]: log.createdAt
+                            }
+                        },
+                        order: [['createdAt', 'ASC']],
+                        attributes: ['id','logGroup', 'qty', 'batchQty', 'unit'],
+                        transaction,
+                    })
+        
+                    if(batches[log.batchNo] === undefined) {
+                        batches[log.batchNo] = {
+                            logs: [],
+                            deleted: false,
+                            flagged: false,
+                            ingredientId: logGroup.dataValues.ingredientId
+                        }
+                    }
+        
+                    if(logHistory.length > 20) {
+                        return res.status(400).send('Log is too far back in history')
+                    }
+                    batches[log.batchNo].logs = logHistory.map(i => i.dataValues)
+                }
+        
+                for(const batchNo of Object.keys(batches)) {
+                    const currBatch = batches[batchNo]
+                    let prev = 0
+                    let first = true
+                    for(const batch of currBatch.logs) {
+                        if(first) {
+                            const match = req.body.IngredientLogs.find(i => i.id === batch.id)
+                            if(match.exclude) {
+                                batch.exclude = true
+                            }
+                            console.log("match:",match)
+                            if(batch.batchQty === null) {
+                                prev = match.qty
+                                batch.prevQty = batch.qty
+                                batch.qty = match.qty
+                                batch.inOut = 'in'
+                            } else {
+                                prev = match.exclude ? batch.batchQty : batch.batchQty - match.qty
+                                batch.prevQty = batch.qty
+                                batch.qty = match.exclude ? 0 : match.qty
+                                batch.inOut = 'out'
+                            }
+                            first = false
+                        } else {
+                            batch.batchQty = prev
+                            prev -= batch.qty
+                            batch.inOut = 'out'
+                        }
+
+                        if(batch.batchQty) {
+                            if(batch.batchQty - batch.qty === 0) {
+                                currBatch.deleted = true
+                            } else if(batch.batchQty - batch.qty < 0) {
+                                currBatch.deleted = false
+                                currBatch.flagged = true
+                            }
+                        }
+                    }
+                }
+
+                await transaction.commit()
+                return res.status(200).send({ affectedBatches: batches })
+            } else {
+                await updateQty(req)
+            }
+        }
+
+        if (req.body.location) {
+            await IngredientLog.update({ location: req.body.location }, {
+                where: {
+                    logGroup: req.params.id
+                },
+                transaction
+            })
+
+            const batch = await IngredientBatch.findOne({
+                where: {
+                    ingredientId: logGroup.dataValues.ingredientId,
+                    batchNo: req.body.batchNo
+                },
+                attributes: ['id'],
+                transaction
+            })
+            if(batch) {
                 await IngredientBatch.update({ location: req.body.location }, {
                     where: {
-                        logId: req.params.id
-                    },
-                    transaction
-                })
-            }
-
-            if (req.body.ed) {
-                await IngredientLogGroup.update({ ed: req.body.ed }, {
-                    where: {
-                        id: req.params.id
-                    },
-                    transaction
-                })
-            }
-
-            if (req.body.product) {
-                await IngredientLogGroup.update({ inProduct: req.body.product }, {
-                    where: {
-                        id: req.params.id
+                        ingredientId: logGroup.dataValues.ingredientId,
+                        batchNo: req.body.batchNo
                     },
                     transaction
                 })
             }
         }
 
+        if (req.body.ed !== undefined) {
+            await IngredientLogGroup.update({ ed: req.body.ed }, {
+                where: {
+                    id: req.params.id
+                },
+                transaction
+            })
+        }
+
+        if (req.body.product) {
+            await IngredientLogGroup.update({ inProduct: req.body.product }, {
+                where: {
+                    id: req.params.id
+                },
+                transaction
+            })
+        }
         transaction.commit()
         return res.sendStatus(200)
     } catch (err) {
         console.error(err)
         transaction.rollback()
+        return res.sendStatus(500)
+    }
+})
+
+router.delete('/log/:id', authenticateTokenAndAdmin, async (req, res) => {
+    const transaction = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED })
+    try {
+        const logGroup = await IngredientLogGroup.findOne({
+            where: {
+                id: req.params.id
+            },
+            include: [
+                {
+                    model: IngredientLog,
+                    attributes: ['batchNo', 'createdAt']
+                }
+            ],
+            transaction
+        })
+
+        if(!logGroup) {
+            await transaction.rollback()
+            return res.sendStatus(404)
+        }
+
+        const user = await User.findOne({
+            where: {
+                id: req.user.id
+            },
+            attributes: ['lastIngredientLogId'],
+            transaction
+        })
+
+        if(req.body.inout === 'in') {
+            const rootLog = logGroup.dataValues.IngredientLogs[0]
+            await IngredientBatch.destroy({
+                where: {
+                    ingredientId: logGroup.dataValues.ingredientId,
+                    batchNo: rootLog.batchNo
+                },
+                transaction
+            })
+            const logHistory = await IngredientLog.findAll({
+                include: [
+                    {
+                        model: IngredientLogGroup,
+                        where: {
+                            ingredientId: logGroup.dataValues.ingredientId
+                        },
+                        required: true,
+                        attributes: ['inout']
+                    }
+                ],
+                where: {
+                    batchNo: rootLog.batchNo,
+                    createdAt: {
+                        [Op.gte]: rootLog.createdAt
+                    }
+                },
+                order: [['createdAt', 'ASC']],
+                attributes: ['id', 'logGroup', 'batchNo', 'qty'],
+                raw: true,
+                transaction,
+            })
+            
+            for(const log of logHistory.map(i => {
+                const { 'IngredientLogGroup.inout': inOut, ...rest } = i
+                return { ...rest, inOut }
+            })) {
+                await createAudit({
+                    ingredientId: logGroup.dataValues.ingredientId,
+                    ingredientLogId: log.id,
+                    batchNo: log.batchNo,
+                    inOut: log.inOut,
+                    user: req.user.id,
+                    qty: log.qty
+                }, 'delete', transaction)
+
+                await IngredientLog.destroy({
+                    where: {
+                        id: log.id
+                    },
+                    transaction
+                })
+
+                if(user.dataValues.lastIngredientLogId === log.logGroup) {
+                    await User.update({
+                        lastIngredientLogId: null
+                    }, {
+                        where: {
+                            id: req.user.id
+                        },
+                        transaction
+                    })
+                }
+
+                await IngredientLogGroup.destroy({
+                    where: {
+                        id: log.logGroup
+                    },
+                    transaction
+                })
+            }
+        } else {
+            if(user.dataValues.lastIngredientLogId === req.params.id) {
+                await User.update({
+                    lastIngredientLogId: null
+                }, {
+                    where: {
+                        id: req.user.id
+                    },
+                    transaction
+                })
+            }
+
+            await IngredientLogGroup.destroy({
+                where: {
+                    id: req.params.id
+                },
+                transaction
+            })
+        }
+
+        await transaction.commit()
+        return res.sendStatus(200)
+    } catch(err) {
+        await transaction.rollback()
+        console.error(err)
+        return res.sendStatus(500)
+    }
+})
+
+router.delete('/category/:id', authenticateTokenAndAdmin, async (req, res) => {
+    try {
+        const foreignKey = await Ingredient.findOne({
+            where: {
+                category: req.params.id
+            }
+        })
+
+        if(foreignKey) {
+            return res.status(400).send('Category is referenced by existing Ingredient.')
+        }
+
+        await IngredientCategory.destroy({
+            where: {
+                id: req.params.id
+            }
+        })
+
+        return res.sendStatus(200)
+    } catch(err) {
+        console.error(err)
         return res.sendStatus(500)
     }
 })

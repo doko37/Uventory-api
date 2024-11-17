@@ -16,11 +16,11 @@ module.exports = (sequelize, DataTypes) => {
             isNull: false,
         },
         category: {
-            type: DataTypes.STRING(255),
+            type: DataTypes.INTEGER.UNSIGNED,
             isNull: false,
             references: {
                 model: 'IngredientCategories',
-                key: 'name'
+                key: 'id'
             }
         },
         supplier: {
@@ -38,11 +38,6 @@ module.exports = (sequelize, DataTypes) => {
         unit: {
             type: DataTypes.ENUM('mg', 'g', 'kg', 'ml', 'l', 'ea'),
             isNull: false,
-        },
-        qty: {
-            type: DataTypes.FLOAT,
-            isNull: false,
-            defaultValue: 0
         },
         ed: {
             type: DataTypes.STRING(255),

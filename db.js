@@ -8,7 +8,11 @@ console.log(hostName)
 
 const sequelize = new Sequelize('uventory', username, password, {
     host: hostName,
-    dialect: 'mysql'
+    dialect: 'mysql',
+    pool: {
+        max: 15,
+        min: 0
+    }
 })
 
 const Product = require('./models/Product')(sequelize, DataTypes)
@@ -29,6 +33,7 @@ const Notification = require('./models/Notification')(sequelize, DataTypes)
 const Ed = require('./models/Ed')(sequelize, DataTypes)
 const ProductTemplate = require('./models/ProductTemplate')(sequelize, DataTypes)
 const ProductTemplateIngredient = require('./models/ProductTemplateIngredient')(sequelize, DataTypes)
+const LogAudit = require('./models/LogAudit')(sequelize, DataTypes)
 
 Ingredient.belongsTo(Supplier, { foreignKey: 'supplier' });
 Ingredient.belongsTo(IngredientCategory, { foreignKey: 'category' })
@@ -39,19 +44,24 @@ User.belongsTo(Ingredient, { foreignKey: 'reservedIngredient' })
 IngredientBatch.belongsTo(Ingredient, { foreignKey: 'ingredientId' })
 IngredientBatch.belongsTo(Location, { foreignKey: 'location' })
 IngredientBatch.belongsTo(IngredientLog, { foreignKey: 'logId' })
+LogAudit.belongsTo(IngredientLog, { foreignKey: 'ingredientLogId' })
+LogAudit.belongsTo(ProductLog, { foreignKey: 'productLogId' })
+LogAudit.belongsTo(User, { foreignKey: 'user' })
+LogAudit.belongsTo(Ingredient, { foreignKey: 'ingredientId' })
+LogAudit.belongsTo(Product, { foreignKey: 'productId' })
 IngredientLog.belongsTo(IngredientLogGroup, { foreignKey: 'logGroup' })
+IngredientLog.belongsTo(Location, { foreignKey: 'location' })
 IngredientLogGroup.belongsTo(Ingredient, { foreignKey: 'ingredientId' })
 IngredientLogGroup.belongsTo(Product, { foreignKey: 'inProduct' })
 IngredientLogGroup.belongsTo(User, { foreignKey: 'user' })
-IngredientLogGroup.belongsTo(Location, { foreignKey: 'location' })
 IngredientLogGroup.hasMany(IngredientLog, { foreignKey: 'logGroup' })
 Product.belongsTo(Brand, { foreignKey: 'brand' })
 ProductBatch.belongsTo(Product, { foreignKey: 'productId' });
 ProductBatch.belongsTo(Location, { foreignKey: 'location' })
 ProductLog.belongsTo(ProductLogGroup, { foreignKey: 'logGroup' })
+ProductLog.belongsTo(Location, { foreignKey: 'location' })
 ProductLogGroup.belongsTo(Product, { foreignKey: 'productId' })
 ProductLogGroup.belongsTo(User, { foreignKey: 'user' })
-ProductLogGroup.belongsTo(Location, { foreignKey: 'location' })
 ProductLogGroup.belongsTo(Ed, { foreignKey: 'ed' })
 ProductLogGroup.hasMany(ProductLog, { foreignKey: 'logGroup' })
 Notification.belongsTo(Ingredient, { foreignKey: 'ingredientId' })
