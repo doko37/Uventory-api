@@ -27,11 +27,26 @@ router.post('/', authenticateTokenAndAdmin, async (req, res) => {
 })
 
 router.post('/brand', authenticateTokenAndAdmin, async (req, res) => {
-    Brand.create({
-        name: req.body.name
-    })
-        .then(data => res.status(200).send(data.toJSON()))
-        .catch(err => res.status(500).send(err))
+    try {
+        const brand = await Brand.findOne({
+            where: {
+                name: req.body.name
+            },
+            raw: true
+        })
+        if(brand) {
+            return res.status(400).send({ text1: `Brand \"${req.body.name}\" already exists.`, text2: 'Please enter a different name.' })
+        }
+        await Brand.create({
+            name: req.body.name
+        })
+
+        res.sendStatus(200)
+    } catch (err) {
+        console.error(err)
+        res.sendStatus(500)
+    }
+
 })
 
 router.post('/log', authenticateTokenAndMember, async (req, res) => {
@@ -149,8 +164,7 @@ router.post('/template', authenticateTokenAndMember, async (req, res) => {
     try {
         const newTemplate = await ProductTemplate.create({
             user: req.user.id,
-            name: req.body.name,
-            productId: req.body.product
+            name: req.body.name
         })
 
         req.body.ingredientList.forEach(async ingredient => {
@@ -173,20 +187,13 @@ router.post('/template', authenticateTokenAndMember, async (req, res) => {
 router.get('/templates', authenticateToken, async (req, res) => {
     try {
         let whereCondition
-        if (req.query.query) {
-            whereCondition[Op.or] = [
-                { name: { [Op.like]: `%${req.query.query}%` } },
-                { '$Product.name$': { [Op.like]: `%${req.query.query}%` } }
-            ]
+        if (req.query.search) {
+            whereCondition = {
+                name: { [Op.like]: `%${req.query.search}%` }
+            }
         }
         const templates = await ProductTemplate.findAll({
             where: whereCondition,
-            include: [
-                {
-                    model: Product,
-                    required: false
-                }
-            ]
         })
         return res.status(200).send(templates)
     } catch (err) {
@@ -212,8 +219,6 @@ router.get('/templates/:id', authenticateToken, async (req, res) => {
         if(!template) {
             return res.sendStatus(404)
         }
-
-        const ingredients = []
 
         for(const pti of template.dataValues.ProductTemplateIngredients.map(i => i.dataValues)) {
             const ingredient = await Ingredient.findOne({
@@ -420,7 +425,11 @@ router.get('/batch/:id', authenticateToken, async (req, res) => {
 })
 
 router.get('/brands', async (req, res) => {
-    Brand.findAll()
+    Brand.findAll({
+        where: {
+            name: { [Op.ne]: 'UBbio' }
+        }
+    })
         .then(data => res.status(200).send(data))
         .catch(err => res.status(500).send(err))
 })
@@ -542,6 +551,32 @@ router.put('/:id', authenticateTokenAndMember, async (req, res) => {
     }
 })
 
+router.put('/brand/:id', authenticateTokenAndAdmin, async (req, res) => {
+    try {
+        const brand = await Brand.findOne({
+            where: {
+                name: req.body.name
+            },
+            raw: true
+        })
+
+        if(brand) {
+            return res.status(400).send({ text1: `Brand \"${brand.name}\" already exists.`, text2: 'Please enter a different name.' })
+        }
+
+        await Brand.update({ name: req.body.name }, {
+            where: {
+                id: req.params.id
+            }
+        })
+
+        return res.sendStatus(200)
+    } catch (err) {
+        console.error(err)
+        return res.sendStatus(500)
+    }
+})
+
 router.put('/template/:id', authenticateTokenAndAdmin, async (req, res) => {
     try {
         await ProductTemplate.update({
@@ -572,6 +607,59 @@ router.put('/template/:id', authenticateTokenAndAdmin, async (req, res) => {
         return res.sendStatus(200)
     } catch (err) {
         console.error(err)
+        return res.sendStatus(500)
+    }
+})
+
+router.delete('/template/:id', authenticateTokenAndAdmin, async (req, res) => {
+    try {
+        await ProductTemplateIngredient.destroy({
+            where: {
+                templateId: req.params.id
+            }
+        })
+
+        await ProductTemplate.destroy({
+            where: {
+                id: req.params.id
+            }
+        })
+
+        return res.sendStatus(200)
+    } catch (err) {
+        console.error(err)
+        return res.sendStatus(500)
+    }
+})
+
+router.delete('/brand/:id', authenticateTokenAndAdmin, async (req, res) => {
+    try {
+        const product = await Product.findOne({
+            where: {
+                brand: req.params.id
+            },
+            attributes: ['id'],
+            raw: true
+        })
+
+        if(product) {
+            const brand = await Brand.findOne({
+                where: {
+                    id: req.params.id
+                },
+                raw: true
+            })
+            return res.status(400).send({ text1: `Cannot delete brand \"${brand.name}\".`, text2: 'It is referenced by existing products.' })
+        }
+
+        await Brand.destroy({
+            where:{ 
+                id: req.params.id
+            }
+        })
+
+        return res.sendStatus(200)
+    } catch (err) {
         return res.sendStatus(500)
     }
 })

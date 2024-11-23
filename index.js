@@ -115,6 +115,19 @@ io.on("connection", (socket) => {
 
     socket.on("reserve", async (data) => {
         console.log(`user ${socket.user.firstName} is reserving`)
+        const user = await User.findOne({
+            where: {
+                reservedIngredient: data.ingredient
+            },
+            attributes: ['id'],
+            raw: true
+        })
+
+        if(user) {
+            socket.emit('reserveError')
+            return
+        }
+
         await User.update({
             reservedIngredient: data.ingredient
         }, {

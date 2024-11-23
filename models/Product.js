@@ -10,20 +10,12 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING(255),
             isNull: false
         },
-        desc: {
-            type: DataTypes.TEXT,
-            isNull: false
-        },
         brand: {
-            type: DataTypes.STRING(255),
+            type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Brands',
-                key: 'name'
+                key: 'id'
             }
-        },
-        qty: {
-            type: DataTypes.INTEGER.UNSIGNED,
-            defaultValue: 0
         },
         memo: {
             type: DataTypes.TEXT

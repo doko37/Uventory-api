@@ -58,13 +58,17 @@ router.get('/', authenticateToken, async (req, res) => {
         };
     }
 
+    const limit = req.body.limit || 20
+    const page = req.query.page || 1
+    const offset = (page - 1) * limit
+
     try {
         const audits = await LogAudit.findAll({
             where: whereCondition,
             include: [
                 {
                     model: Ingredient,
-                    required: false,
+                    required: true,
                     attributes: ['code'],
                 },
                 {
@@ -78,6 +82,8 @@ router.get('/', authenticateToken, async (req, res) => {
                 },
             ],
             order: [['createdAt', req.query.dir || 'DESC']],
+            limit: limit,
+            offset: offset,
             raw: true
         })
 

@@ -6,15 +6,15 @@ module.exports = (sequelize, DataTypes) => {
             primaryKey: true,
             unique: true
         },
-        batchNo: {
-            type: DataTypes.STRING(255)
-        },
         productId: {
             type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Products',
                 key: 'id'
             }
+        },
+        batchNo: {
+            type: DataTypes.STRING(255)
         },
         expDate: {
             type: DataTypes.DATE
@@ -33,6 +33,10 @@ module.exports = (sequelize, DataTypes) => {
             }
         },
         alertDismissed: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
+        },
+        flagged: {
             type: DataTypes.BOOLEAN,
             defaultValue: false
         }

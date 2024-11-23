@@ -20,18 +20,8 @@ module.exports = (sequelize, DataTypes) => {
                 key: 'id'
             }
         },
-        location: {
-            type: DataTypes.INTEGER.UNSIGNED,
-            references: {
-                model: 'Locations',
-                key: 'id'
-            }
-        },
         inout: {
             type: DataTypes.ENUM('in', 'out')
-        },
-        qty: {
-            type: DataTypes.FLOAT
         },
         ed: {
             type: DataTypes.STRING(255),
@@ -43,6 +33,18 @@ module.exports = (sequelize, DataTypes) => {
         remark: {
             type: DataTypes.TEXT
         },
+    }, {
+        paranoid: true,
+        indexes: [
+            {
+                unique: false,
+                fields: ['productId']
+            },
+            {
+                unique: false,
+                fields: ['createdAt']
+            }
+        ]
     })
 
     return ProductLogGroup

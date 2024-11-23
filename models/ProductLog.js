@@ -25,10 +25,34 @@ module.exports = (sequelize, DataTypes) => {
         qty: {
             type: DataTypes.INTEGER
         },
+        batchQty: {
+            type: DataTypes.FLOAT,
+            allowNull: true,
+            defaultValue: null
+        },
+        location: {
+            type: DataTypes.INTEGER.UNSIGNED,
+            references: {
+                model: 'Locations',
+                key: 'id'
+            }
+        },
         batchDeleted: {
             type: DataTypes.BOOLEAN,
             defaultValue: false
+        },
+        flagged: {
+            type: DataTypes.BOOLEAN,
+            default: false
         }
+    }, {
+        paranoid: true,
+        indexes: [
+            {
+                unique: false,
+                fields: ['createdAt']
+            }
+        ]
     })
 
     return ProductLog

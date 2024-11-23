@@ -17,13 +17,6 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING(255),
             unique: true
         },
-        productId: {
-            type: DataTypes.INTEGER.UNSIGNED,
-            references: {
-                model: 'Products',
-                key: 'id'
-            }
-        }
     })
 
     return ProductTemplate
