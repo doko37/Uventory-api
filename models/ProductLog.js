@@ -1,37 +1,58 @@
 module.exports = (sequelize, DataTypes) => {
     const ProductLog = sequelize.define('ProductLog', {
         id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.UUID,
+            defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
             unique: true,
-            autoIncrement: true
         },
-        productId: {
-            type: DataTypes.INTEGER,
+        logGroup: {
+            type: DataTypes.UUID,
             references: {
-                model: 'Products',
+                model: 'ProductLogGroups',
                 key: 'id'
             }
         },
         batchNo: {
             type: DataTypes.STRING(255)
         },
-        user: {
-            type: DataTypes.INTEGER,
-            references: {
-                model: 'Users',
-                key: 'id'
-            }
+        expDate: {
+            type: DataTypes.DATE
         },
-        inout: {
-            type: DataTypes.ENUM('in', 'out')
+        poDate: {
+            type: DataTypes.DATE
         },
         qty: {
             type: DataTypes.INTEGER
         },
-        remark: {
-            type: DataTypes.TEXT
+        batchQty: {
+            type: DataTypes.FLOAT,
+            allowNull: true,
+            defaultValue: null
+        },
+        location: {
+            type: DataTypes.INTEGER.UNSIGNED,
+            references: {
+                model: 'Locations',
+                key: 'id'
+            }
+        },
+        batchDeleted: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
+        },
+        flagged: {
+            type: DataTypes.BOOLEAN,
+            default: false
         }
+    }, {
+        paranoid: true,
+        indexes: [
+            {
+                unique: false,
+                fields: ['createdAt']
+            }
+        ]
     })
 
     return ProductLog

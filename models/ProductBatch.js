@@ -1,19 +1,20 @@
 module.exports = (sequelize, DataTypes) => {
     const ProductBatch = sequelize.define('ProductBatch', {
         id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.UUID,
+            defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
-            autoIncrement: true
-        },
-        batchNo: {
-            type: DataTypes.STRING(255)
+            unique: true
         },
         productId: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Products',
                 key: 'id'
             }
+        },
+        batchNo: {
+            type: DataTypes.STRING(255)
         },
         expDate: {
             type: DataTypes.DATE
@@ -25,11 +26,19 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.INTEGER
         },
         location: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Locations',
                 key: 'id'
             }
+        },
+        alertDismissed: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
+        },
+        flagged: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
         }
     })
 

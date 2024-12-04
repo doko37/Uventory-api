@@ -1,19 +1,27 @@
 module.exports = (sequelize, DataTypes) => {
     const IngredientBatch = sequelize.define('IngredientBatch', {
         id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.UUID,
+            defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
-            autoIncrement: true
-        },
-        batchNo: {
-            type: DataTypes.STRING(255)
+            unique: true,
         },
         ingredientId: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Ingredients',
                 key: 'id'
             }
+        },
+        logId: {
+            type: DataTypes.UUID,
+            refernces: {
+                model: 'IngredientLog',
+                key: 'id'
+            }
+        },
+        batchNo: {
+            type: DataTypes.STRING(255),
         },
         expDate: {
             type: DataTypes.DATE
@@ -25,11 +33,19 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.FLOAT
         },
         location: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Locations',
                 key: 'id'
             }
+        },
+        alertDismissed: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
+        },
+        flagged: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
         }
     })
 

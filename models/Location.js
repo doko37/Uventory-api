@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
     const Location = sequelize.define('Location', {
         id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             primaryKey: true,
             unique: true,
             autoIncrement: true

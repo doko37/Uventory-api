@@ -1,51 +1,62 @@
 module.exports = (sequelize, DataTypes) => {
     const IngredientLog = sequelize.define('IngredientLog', {
         id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.UUID,
+            defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
             unique: true,
-            autoIncrement: true
         },
-        ingredientId: {
-            type: DataTypes.INTEGER,
+        logGroup: {
+            type: DataTypes.UUID,
             references: {
-                model: 'Ingredients',
+                model: 'IngredientLogGroups',
                 key: 'id'
             }
         },
         batchNo: {
             type: DataTypes.STRING(255)
         },
+        expDate: {
+            type: DataTypes.DATE
+        },
+        poDate: {
+            type: DataTypes.DATE
+        },
+        qty: {
+            type: DataTypes.FLOAT
+        },
+        batchQty: {
+            type: DataTypes.FLOAT,
+            allowNull: true,
+            defaultValue: null
+        },
+        unit: {
+            type: DataTypes.ENUM('mg', 'g', 'kg', 'ml', 'l', 'ea'),
+            isNull: false,
+        },
         location: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.INTEGER.UNSIGNED,
             references: {
                 model: 'Locations',
                 key: 'id'
             }
         },
-        user: {
-            type: DataTypes.INTEGER,
-            references: {
-                model: 'Users',
-                key: 'id'
-            }
+        batchDeleted: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
         },
-        inout: {
-            type: DataTypes.ENUM('in', 'out')
-        },
-        qty: {
-            type: DataTypes.FLOAT
-        },
-        inProduct: {
-            type: DataTypes.INTEGER,
-            references: {
-                model: 'Products',
-                key: 'id'
-            }
-        },
-        remark: {
-            type: DataTypes.TEXT
+        flagged: {
+            type: DataTypes.BOOLEAN,
+            default: false
         }
+    }, {
+        paranoid: true,
+        indexes: [
+            {
+                unique: false,
+                fields: ['createdAt']
+            }
+        ]
     })
 
     return IngredientLog
