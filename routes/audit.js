@@ -8,27 +8,31 @@ const Ingredient = db.models.Ingredient
 const IngredientLog = db.models.IngredientLog
 const User = db.models.User
 const Product = db.models.Product
+const ProductLog = db.models.ProductLog
 
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, async (req, res, next) => {
     let whereCondition = { [Op.and]: [] };
 
-    // if(req.query.show === 'ingredients') {
-    //     whereCondition[Op.ne] = {
-    //         ingredientId: null
-    //     }
-    // } else if(req.query.show === 'products') {
-    //     whereCondition[Op.ne] = {
-    //         productId: null
-    //     }
-    // }
+    if(req.query.show === 'ingredients') {
+        whereCondition[Op.and].push(
+            { productId: null },
+            { ingredientId: { [Op.ne]: null } }
+        )
+    } else if(req.query.show === 'products') {
+        whereCondition[Op.and].push(
+            { productId: { [Op.ne]: null } },
+            { ingredientId: null }
+        )
+    }
 
     if(req.query.search) {
-        searchCondition = {
+        const searchCondition = {
             [Op.or]: [
                 { '$User.firstName$': { [Op.like]: `%${req.query.search}%` } },
                 { '$User.lastName$': { [Op.like]: `%${req.query.search}%` } },
                 { batchNo: { [Op.like]: `%${req.query.search}%` } },
-                { '$Ingredient.code$': { [Op.like]: `%${req.query.search}%` } }
+                { '$Ingredient.code$': { [Op.like]: `%${req.query.search}%` } },
+                { '$Product.code$': { [Op.like]: `%${req.query.search}%` } }
             ]
         }
         whereCondition[Op.and].push(searchCondition)
@@ -68,13 +72,13 @@ router.get('/', authenticateToken, async (req, res) => {
             include: [
                 {
                     model: Ingredient,
-                    required: true,
+                    required: false,
                     attributes: ['code'],
                 },
                 {
                     model: Product,
                     required: false,
-                    attributes: [],
+                    attributes: ['code'],
                 },
                 {
                     model: User,
@@ -88,22 +92,22 @@ router.get('/', authenticateToken, async (req, res) => {
         })
 
         const renamedAudits = audits.map(audit => {
-            const { 'Ingredient.code': ingredientCode, ...rest } = audit
+            const { 'Ingredient.code': ingredientCode, 'Product.code': productCode, ...rest } = audit
             return {
                 ...rest,
-                ingredientCode
+                ingredientCode,
+                productCode
             }
         })
 
         return res.status(200).send(renamedAudits)
     } catch (err) {
         console.error(err)
-        return res.sendStatus(500)
+        next(err)
     }
 })
 
-router.get('/:id', authenticateToken, async (req, res) => {
-    console.log("get audit", req.params.id)
+router.get('/:id', authenticateToken, async (req, res, next) => {
     try {
         const audit = await LogAudit.findOne({
             where: {
@@ -112,7 +116,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
             include: [
                 {
                     model: IngredientLog,
-                    attributes: ['unit'],
                     required: false,
                     paranoid: false,
                     where: {
@@ -125,20 +128,44 @@ router.get('/:id', authenticateToken, async (req, res) => {
                 },
                 {
                     model: Ingredient,
-                    attributes: ['code']
+                    attributes: ['name', 'code', 'unit']
+                },
+                {
+                    model: ProductLog,
+                    paranoid: false,
+                    required: false,
+                    where: {
+                        [Op.or]: [ { deletedAt: null }, { deletedAt: { [Op.not]: null } } ]
+                    }
+                },
+                {
+                    model: Product,
+                    attributes: ['name', 'code']
                 }
+
             ],
             raw: true
         })
 
-        console.log(audit)
-
-        const { 'IngredientLog.unit': unit, 'User.firstName': firstName, 'User.lastName': lastName, 'Ingredient.code': ingredientCode, ...rest } = audit
-
-        return res.status(200).send({ ...rest, unit, user: { firstName, lastName }, ingredientCode })
+        if(audit.ingredientId) {
+            const { 
+                'Ingredient.unit': unit,
+                'Ingredient.name': ingredientName, 
+                'User.firstName': firstName, 
+                'User.lastName': lastName, 
+                'Ingredient.code': ingredientCode,
+                ...rest 
+            } = audit
+    
+            return res.status(200).send({ ...rest, unit, user: { firstName, lastName }, ingredientCode, ingredientName })
+        } else {
+            const { 'Product.name': productName, 'User.firstName': firstName, 'User.lastName': lastName, 'Product.code': productCode, ...rest } = audit
+    
+            return res.status(200).send({ ...rest, user: { firstName, lastName }, productName, productCode })
+        }
     } catch (err) {
         console.error(err)
-        return res.sendStatus(500)
+        next(err)
     }
 })
 

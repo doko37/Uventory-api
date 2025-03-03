@@ -4,14 +4,17 @@ const { authenticateTokenAndAdmin, authenticateToken } = require('./authToken')
 const Supplier = db.models.Supplier
 const Ed = db.models.Ed
 const Ingredient = db.models.Ingredient
+const { Op, Sequelize, Transaction } = require('sequelize')
 
-router.post('/', authenticateTokenAndAdmin, async (req, res) => {
+router.post('/', authenticateTokenAndAdmin, async (req, res, next) => {
+    console.log(req.body)
     const supplier = await Supplier.findOne({
         where: {
             name: req.body.name
         },
         attributes: ['id'],
-        raw: true
+        raw: true,
+        paranoid: false
     })
 
     if(supplier) {
@@ -24,13 +27,13 @@ router.post('/', authenticateTokenAndAdmin, async (req, res) => {
         email: req.body.email,
         phone: req.body.phone,
         person: req.body.person,
-        address: req.body.address
+        location: req.body.location
     })
         .then(data => res.status(200).send(data.toJSON()))
-        .catch(err => res.status(500).send(err))
+        .catch(err => next(err))
 })
 
-router.post('/ed', authenticateTokenAndAdmin, async (req, res) => {
+router.post('/ed', authenticateTokenAndAdmin, async (req, res, next) => {
     try {
         const num = await Ed.findOne({
             where: {
@@ -50,21 +53,21 @@ router.post('/ed', authenticateTokenAndAdmin, async (req, res) => {
         return res.sendStatus(200)
     } catch (err) {
         console.error(err)
-        return res.sendStatus(500)
+        next(err)
     }
 
 })
 
-router.get('/ed', authenticateToken, async (req, res) => {
+router.get('/ed', authenticateToken, async (req, res, next) => {
     Ed.findAll().then(data => {
         return res.status(200).send(data)
     }).catch(err => {
         console.error(err)
-        return res.sendStatus(500)
+        next(err)
     })
 })
 
-router.put('/:id', authenticateTokenAndAdmin, async (req, res) => {
+router.put('/:id', authenticateTokenAndAdmin, async (req, res, next) => {
     Supplier.update(req.body, {
         where: {
             id: req.params.id
@@ -73,32 +76,65 @@ router.put('/:id', authenticateTokenAndAdmin, async (req, res) => {
         .then(data => res.status(200).send(data))
         .catch(err => {
             console.error(err)
-            res.status(500).send(err)
+            next(err)
         })
 })
 
-router.get('/', authenticateToken, async (req, res) => {
-    Supplier.findAll()
-        .then(data => res.status(200).send(data))
-        .catch(err => {
-            console.error(err)
-            res.status(500).send(err)
+router.get('/', authenticateToken, async (req, res, next) => {
+    try {
+        let whereCondition = {}
+        if(req.query.search) {
+            whereCondition[Op.or] = [
+                { name: { [Op.like]: `%${req.query.search}%` } },
+                { email: { [Op.like]: `%${req.query.search}%` } },
+                { person: { [Op.like]: `%${req.query.search}%` } },
+                { location: { [Op.like]: `%${req.query.search}%` } }
+            ]
+        }
+
+        if(req.query.region && req.query.region !== 'All') {
+            whereCondition['region'] = req.query.region
+        }
+
+        const limit = req.body.limit || 20
+        const page = req.query.page || 1
+        const offset = (page - 1) * limit
+
+        const suppliers = await Supplier.findAll({
+            where: whereCondition,
+            order: [['name', req.query.dir || 'ASC']],
+            limit: limit,
+            offset: offset
         })
+
+        return res.status(200).send(suppliers)
+    } catch (err) { 
+        console.error(err)
+        res.sendStatus(500)
+    }
 })
 
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res, next) => {
     Supplier.findOne({
         where: {
             id: req.params.id
         }
     })
         .then(data => res.status(200).send(data.toJSON()))
-        .catch(err => res.status(500).send(err))
+        .catch(err => next(err))
 })
 
-router.delete('/:id', authenticateTokenAndAdmin, async (req, res) => {
+router.delete('/:id', authenticateTokenAndAdmin, async (req, res, next) => {
     try {
-        
+        const supplier = await Supplier.findOne({
+            where: {
+                id: req.params.id
+            },
+        })
+
+        if(!supplier) {
+            return res.status(404).send({ text1: 'Supplier cannot be found.' })
+        }
         const ingredient = await Ingredient.findOne({
             where: {
                 supplier: req.params.id
@@ -106,24 +142,16 @@ router.delete('/:id', authenticateTokenAndAdmin, async (req, res) => {
         })
         
         if(ingredient) {
-            const supplier = await Supplier.findOne({
-                where: {
-                    id: req.params.id
-                },
-                attributes: ['name'],
-                raw: true
-            })
-            return res.status(400).send({ text1: `Cannot delete supplier \"${supplier.name}\".`, text2: 'It is referenced by existing Ingredient(s).' })
+            return res.status(400).send({ text1: `Cannot delete supplier \"${supplier.dataValues.name}\".`, text2: 'It is referenced by existing Ingredient(s).' })
         }
-        await Supplier.destroy({
-            where: {
-                id: req.params.id
-            }
-        })
+
+        supplier.name = null
+        await supplier.save()
+        await supplier.destroy()
 
         res.sendStatus(200)
     } catch(err) {
-        console.log(err)
+        console.error(err)
         res.sendStatus(500)
     }
 })

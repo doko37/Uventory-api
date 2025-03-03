@@ -23,7 +23,7 @@ module.exports = (sequelize, DataTypes) => {
             isNull: false
         },
         access: {
-            type: DataTypes.ENUM('admin', 'member', 'associate-member'),
+            type: DataTypes.ENUM('root', 'admin', 'member', 'associate-member'),
             defaultValue: 'associate-member',
             isNull: false
         },
@@ -32,6 +32,14 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: true,
             references: {
                 model: 'Ingredients',
+                key: 'id'
+            }
+        },
+        reservedProduct: {
+            type: DataTypes.INTEGER.UNSIGNED,
+            allowNull: true,
+            references: {
+                model: 'Products',
                 key: 'id'
             }
         },
@@ -48,7 +56,14 @@ module.exports = (sequelize, DataTypes) => {
                 model: 'ProductLogGroups',
                 key: 'id'
             }
+        },
+        loginToken: {
+            type: DataTypes.STRING,
+            allowNull: true,
+            defaultValue: null
         }
+    }, {
+        paranoid: true
     })
 
     return User

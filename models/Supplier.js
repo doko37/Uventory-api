@@ -7,7 +7,7 @@ module.exports = (sequelize, DataTypes) => {
             autoIncrement: true
         },
         region: {
-            type: DataTypes.ENUM('NZ', 'Overseas')
+            type: DataTypes.ENUM('NZ', 'Overseas', 'China')
         },
         name: {
             type: DataTypes.STRING(255),
@@ -22,7 +22,7 @@ module.exports = (sequelize, DataTypes) => {
         person: {
             type: DataTypes.STRING(255)
         },
-        address: {
+        location: {
             type: DataTypes.STRING(255)
         }
     }, {

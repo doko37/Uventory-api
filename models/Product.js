@@ -6,9 +6,22 @@ module.exports = (sequelize, DataTypes) => {
             unique: true,
             autoIncrement: true
         },
+        category: {
+            type: DataTypes.INTEGER.UNSIGNED,
+            isNull: false,
+            references: {
+                model: 'ProductCategories',
+                key: 'id'
+            }
+        },
+        code: {
+            type: DataTypes.STRING(255),
+            unique: true
+        },
         name: {
             type: DataTypes.STRING(255),
-            isNull: false
+            isNull: false,
+            unique: true
         },
         brand: {
             type: DataTypes.INTEGER.UNSIGNED,
@@ -19,7 +32,14 @@ module.exports = (sequelize, DataTypes) => {
         },
         memo: {
             type: DataTypes.TEXT
+        },
+        expirationTime: {
+            type: DataTypes.INTEGER.UNSIGNED,
+            allowNull: false,
+            defaultValue: 60
         }
+    }, {
+        paranoid: true
     })
 
     return Product

@@ -17,10 +17,12 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING(255)
         },
         expDate: {
-            type: DataTypes.DATE
+            type: DataTypes.DATE,
+            allowNull: true
         },
         poDate: {
-            type: DataTypes.DATE
+            type: DataTypes.DATE,
+            allowNull: true
         },
         qty: {
             type: DataTypes.FLOAT
@@ -39,7 +41,8 @@ module.exports = (sequelize, DataTypes) => {
             references: {
                 model: 'Locations',
                 key: 'id'
-            }
+            },
+            allowNull: true
         },
         batchDeleted: {
             type: DataTypes.BOOLEAN,

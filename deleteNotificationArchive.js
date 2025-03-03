@@ -8,7 +8,7 @@ const deleteNotificationArchive = async () => {
         await Notification.destroy({
             where: {
                 updatedAt: {
-                    [Op.lt]: new Date(new Date() - (24 * 7) * 60 * 60 * 1000)
+                    [Op.lt]: new Date(new Date() - (24 * 14) * 60 * 60 * 1000)
                 },
                 dismissed: true
             }

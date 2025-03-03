@@ -1,14 +1,15 @@
 const router = require('express').Router()
 const db = require('../db')
+const { Op } = require('sequelize')
 const { authenticateTokenAndAdmin, authenticateToken, authenticateTokenAndMember } = require('./authToken')
 const Notification = db.models.Notification
 const User = db.models.User
 const Ingredient = db.models.Ingredient
 const IngredientBatch = db.models.IngredientBatch
 
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, async (req, res, next) => {
     const includeAttribute = []
-    const dismissed = req.query.dismissed === 'true' ? true : false
+    const dismissed = req.query.dismissed !== undefined && req.query.dismissed === 'true' ? true : false
     if (req.query.dismissed !== undefined && dismissed) {
         includeAttribute.push({
             model: User,
@@ -16,27 +17,57 @@ router.get('/', authenticateToken, async (req, res) => {
             required: true
         })
     }
-    console.log(includeAttribute)
+
+    const whereCondition = []
+    whereCondition.push({ dismissed: dismissed })
+
+    if (req.query.startDate) {
+        whereCondition.push({ createdAt: { [Op.gte]: req.query.startDate } })
+    }
+
+    if (req.query.endDate) {
+        whereCondition.push({ createdAt: { [Op.lte]: req.query.endDate } })
+    }
+    
+    const limit = req.body.limit || 20
+    const page = req.query.page || 1
+    const offset = (page - 1) * limit
+
     Notification.findAll({
         include: includeAttribute,
-        where: {
-            dismissed: req.query.dismissed !== undefined ? dismissed : true
-        },
-        order: [[dismissed ? 'updatedAt' : 'createdAt', 'ASC']]
+        where: whereCondition,
+        order: [[dismissed ? 'updatedAt' : 'createdAt', req.query.dir || 'DESC']],
+        limit: limit,
+        offset: offset
     }).then(data => {
         return res.send(data).status(200)
     }).catch(err => {
         console.error(err)
-        return res.sendStatus(500)
+        next(err)
     })
 })
 
-router.put('/dismiss/:id', authenticateTokenAndMember, async (req, res) => {
+router.get('/totalLength', authenticateToken, async (req, res, next) => {
+    try {
+        const length = await Notification.count({
+            where: {
+                dismissed: false
+            }
+        })
+        
+        return res.status(200).send({ length: length })
+    } catch (err) {
+        next(err)
+    }
+})
+
+router.put('/dismiss/:id', authenticateTokenAndMember, async (req, res, next) => {
     try {
         const notification = await Notification.findOne({
             where: {
                 id: req.params.id
-            }
+            },
+            raw: true
         })
 
         await Notification.update({
@@ -66,28 +97,61 @@ router.put('/dismiss/:id', authenticateTokenAndMember, async (req, res) => {
             })
         }
 
+        req.io.emit('notification')
+
         return res.sendStatus(200)
     } catch (err) {
         console.error(err)
-        return res.sendStatus(500)
+        next(err)
     }
 })
 
-router.put('/restore/:id', authenticateTokenAndAdmin, async (req, res) => {
-    Notification.update(
-        {
-            dismissed: false,
-            user: null
-        },
-        {
+router.put('/restore/:id', authenticateTokenAndAdmin, async (req, res, next) => {
+    try {
+        const notification = await Notification.findOne({
             where: {
                 id: req.params.id
+            },
+            raw: true
+        })
+
+        await Notification.update(
+            {
+                dismissed: false,
+                user: null
+            },
+            {
+                where: {
+                    id: req.params.id
+                }
             }
+        )
+
+        if (notification.type === 'lowStock') {
+            await Ingredient.update({
+                alertDismissed: false
+            }, {
+                where: {
+                    id: notification.ingredientId
+                }
+            })
+        } else if (notification.type === 'expiryDate') {
+            await IngredientBatch.update({
+                alertDismissed: false
+            }, {
+                where: {
+                    id: notification.batchId
+                }
+            })
         }
-    ).then(() => res.sendStatus(200)).catch(err => {
+
+        req.io.emit('notification')
+
+        return res.sendStatus(200)
+    } catch (err) {
         console.error(err)
-        return res.sendStatus(500)
-    })
+        next(err)
+    }
 })
 
 module.exports = router

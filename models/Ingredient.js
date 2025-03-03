@@ -25,7 +25,7 @@ module.exports = (sequelize, DataTypes) => {
         },
         supplier: {
             type: DataTypes.INTEGER.UNSIGNED,
-            isNull: false,
+            allowNull: true,
             references: {
                 model: 'Suppliers',
                 key: 'id'
@@ -33,7 +33,7 @@ module.exports = (sequelize, DataTypes) => {
         },
         stockAlert: {
             type: DataTypes.FLOAT,
-            isNull: false
+            allowNull: true
         },
         unit: {
             type: DataTypes.ENUM('mg', 'g', 'kg', 'ml', 'l', 'ea'),
@@ -53,6 +53,11 @@ module.exports = (sequelize, DataTypes) => {
         alertDismissed: {
             type: DataTypes.BOOLEAN,
             defaultValue: false
+        },
+        expirationTime: {
+            type: DataTypes.INTEGER.UNSIGNED,
+            allowNull: false,
+            defaultValue: 60
         }
     }, {
         paranoid: true

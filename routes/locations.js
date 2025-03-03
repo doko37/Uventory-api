@@ -5,7 +5,7 @@ const Location = db.models.Location
 const IngredientBatch = db.models.IngredientBatch
 const ProductBatch = db.models.ProductBatch
 
-router.post('/reset', authenticateTokenAndAdmin, async (req, res) => {
+router.post('/reset', authenticateTokenAndAdmin, async (req, res, next) => {
     const locations = [
         'Bottle storage',
         'Shed',
@@ -37,21 +37,21 @@ router.post('/reset', authenticateTokenAndAdmin, async (req, res) => {
     res.sendStatus(200)
 })
 
-router.post('/', authenticateTokenAndAdmin, async (req, res) => {
+router.post('/', authenticateTokenAndAdmin, async (req, res, next) => {
     Location.create({
         name: req.body.name
     })
         .then(data => res.status(200).send(data.toJSON()))
-        .catch(err => res.status(500).send(err))
+        .catch(err => next(err))
 })
 
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, async (req, res, next) => {
     Location.findAll()
         .then(data => res.status(200).send(data))
-        .catch(err => res.status(500).send(err))
+        .catch(err => next(err))
 })
 
-router.put('/:id', authenticateTokenAndAdmin, async (req, res) => {
+router.put('/:id', authenticateTokenAndAdmin, async (req, res, next) => {
     Location.update(
         { name: req.body.name },
         {
@@ -66,7 +66,7 @@ router.put('/:id', authenticateTokenAndAdmin, async (req, res) => {
         })
 })
 
-router.delete('/:id', authenticateTokenAndAdmin, async (req, res) => {
+router.delete('/:id', authenticateTokenAndAdmin, async (req, res, next) => {
     const ingredientBatches = await IngredientBatch.findAll({
         where: {
             location: req.params.id
